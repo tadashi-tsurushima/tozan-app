@@ -47,7 +47,7 @@ h1, h2, h3, legend, summary {
    min-height で下限を確保する。 */
 .hero {
   position: relative;
-  aspect-ratio: 1090 / 300;
+  aspect-ratio: 1090 / 255;
   min-height: 215px;
   margin: -16px -16px 20px;
   overflow: hidden;

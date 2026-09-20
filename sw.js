@@ -2,7 +2,7 @@
 // オフラインで起動できるようにする。要件1（山中は圏外）の実現手段。
 //
 // アプリを更新したら CACHE_VERSION を上げること。古いキャッシュは activate 時に破棄する。
-const CACHE_VERSION = "v7";
+const CACHE_VERSION = "v9";
 const CACHE_NAME = `tozan-app-shell-${CACHE_VERSION}`;
 
 // 必須のアプリ本体一式。1つでも取得できなければ install 自体を失敗させ、
@@ -26,9 +26,17 @@ const REQUIRED_ASSETS = [
 // 変わるため、無くても install 全体を失敗させない。
 const OPTIONAL_ASSETS = ["verify.html", "cases.json"];
 
+// { cache: "reload" } でブラウザの通常HTTPキャッシュを無視し、必ずネットワークから
+// 取り直す。cache.addAll() や素の fetch() だと、画像などが過去に一度取得済みの
+// URLの場合にHTTPキャッシュから古い内容を拾ってしまい、CACHE_VERSIONを上げても
+// 中身が更新されない不具合があった（hero.jpg差し替え時に発覚）。
+async function fetchFresh(url) {
+  return fetch(url, { cache: "reload" });
+}
+
 async function cacheIfAvailable(cache, url) {
   try {
-    const res = await fetch(url);
+    const res = await fetchFresh(url);
     if (res && res.ok) await cache.put(url, res);
   } catch (err) {
     // 無くてもよい
@@ -39,7 +47,11 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      await cache.addAll(REQUIRED_ASSETS);
+      for (const url of REQUIRED_ASSETS) {
+        const res = await fetchFresh(url);
+        if (!res || !res.ok) throw new Error(`required asset failed: ${url}`);
+        await cache.put(url, res);
+      }
 
       for (const url of OPTIONAL_ASSETS) await cacheIfAvailable(cache, url);
 
