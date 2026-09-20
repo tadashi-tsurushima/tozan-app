@@ -179,7 +179,7 @@ def run_simulation_from_form(gpx_text, form_values_json):
 
     result = simulate(route, params)
     summary = plan_summary(result, params)
-    series = ui_series(result, pace_smooth_window=5)
+    series = ui_series(result, pace_smooth_minutes=15)
     plan = supply_plan(result, params)
     return json.dumps({"ok": True, "result": result.to_dict(), "summary": summary,
                         "series": series, "plan": plan})
@@ -665,13 +665,11 @@ function showDay(dayIndex) {
   charts.pace = makeLineChart("chartPace",
     [
       elevationBackdrop(s),
-      { label: "スピード", data: toPoints(s.elapsed_h, s.speed_pct), borderColor: "#63A6A0" },
+      { label: "スピード", data: toPoints(s.elapsed_h, s.pace_min_per_km), borderColor: "#63A6A0" },
     ],
     null,
-    // 30分/kmを100%とした相対速度（依頼者指定・2026-09-19、tozan/derived.py 参照）。
-    // 50%刻みの目盛りにして、基準の100%がそのまま目盛り線として見えるようにする。
-    { y: { title: { display: true, text: "スピード [%]" }, min: 0, max: 250,
-           ticks: { stepSize: 50 } } }, 1);
+    // 相対速度(%)表示（2026-09-19）から分/km表示に戻した（依頼者指定・2026-09-20）。
+    { y: { title: { display: true, text: "ペース [分/km]" }, min: 0, max: 50 } }, 1);
 
   charts.energy = makeLineChart("chartEnergy",
     [
