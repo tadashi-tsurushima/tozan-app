@@ -9,15 +9,6 @@
 const VERSIONS = ["0.28.0", "0.27.7", "0.27.5", "0.27.2", "0.26.4", "0.25.1"];
 const CDN = v => `https://cdn.jsdelivr.net/pyodide/v${v}/full/`;
 const STORAGE_KEY = "tozan_params_v1";
-const THEME_KEY = "tozan_theme_v1";
-
-// 保存済みのテーマ選択を、他の描画より先に反映する（自動＝属性なし＝端末設定に追従）。
-try {
-  const savedTheme = localStorage.getItem(THEME_KEY);
-  if (savedTheme === "light" || savedTheme === "dark") {
-    document.documentElement.setAttribute("data-theme", savedTheme);
-  }
-} catch (e) { /* localStorage が使えない環境では自動のまま */ }
 
 const statusEl = document.getElementById("status");
 const outEl = document.getElementById("out");
@@ -30,61 +21,17 @@ const dayTabsEl = document.getElementById("dayTabs");
 const dayStatsEl = document.getElementById("dayStats");
 const chartsEl = document.getElementById("charts");
 const supplyPlanEl = document.getElementById("supplyPlan");
-const themeToggleEl = document.getElementById("themeToggle");
 const sampleGpxEl = document.getElementById("sampleGpx");
 
-// Chart.js の既定文字色・グリッド色はダークテーマだと黒背景に対してコントラストが
-// 低く、目盛り・軸タイトル・凡例が読めなくなる。app.css の --chart-fg
-// （ライト/ダークで切り替わるカスタムプロパティ）に合わせる。
-function chartTextColor() {
-  return getComputedStyle(document.documentElement).getPropertyValue("--chart-fg").trim();
-}
+// 「夜明けの稜線」テーマは常時ダーク固定の1配色なので、Chart.js の既定文字色・
+// グリッド色も app.css の --chart-fg / --text-muted に合わせて固定でよい
+// （旧ライト/ダーク切り替え時にあった動的な読み直しは不要になった）。
 if (window.Chart) {
-  Chart.defaults.color = chartTextColor();
-  Chart.defaults.borderColor = "rgba(128, 128, 128, 0.25)";
+  Chart.defaults.color = getComputedStyle(document.documentElement).getPropertyValue("--chart-fg").trim();
+  Chart.defaults.borderColor = "rgba(255, 255, 255, 0.08)";
   // スマホ縦画面に3グラフ入るよう高さを縮めた（app.css .chart-wrap）ぶん、
   // 目盛り・軸タイトルの文字も少し小さくして余白を稼ぐ（依頼者確認・2026-09-19）。
   Chart.defaults.font.size = 10;
-}
-
-function currentThemeMode() {
-  const t = document.documentElement.getAttribute("data-theme");
-  return t === "light" || t === "dark" ? t : "auto";
-}
-
-// Chart.js は凡例の文字色などを「作成時点の Chart.defaults.color」で固定して
-// 持つ（軸目盛りのように毎回 defaults を読み直すルートを通らない）ため、
-// defaults を更新して update() を呼ぶだけでは凡例の色が変わらない。
-// 表示中のグラフを作り直して確実に新しい色を反映する。
-function refreshChartColors() {
-  if (!window.Chart) return;
-  Chart.defaults.color = chartTextColor();
-  if (!currentSeries || chartsEl.hidden) return;
-  const activeBtn = dayTabsEl.querySelector("button.active");
-  const dayIndex = activeBtn ? parseInt(activeBtn.dataset.day, 10) : 0;
-  showDay(dayIndex);
-}
-
-function applyTheme(mode) {
-  if (mode === "light" || mode === "dark") {
-    document.documentElement.setAttribute("data-theme", mode);
-  } else {
-    document.documentElement.removeAttribute("data-theme");
-  }
-  try { localStorage.setItem(THEME_KEY, mode); } catch (e) { /* 無視 */ }
-  if (themeToggleEl) {
-    themeToggleEl.querySelectorAll("button").forEach(b => {
-      b.classList.toggle("active", b.dataset.theme === mode);
-    });
-  }
-  refreshChartColors();
-}
-
-if (themeToggleEl) {
-  themeToggleEl.querySelectorAll("button").forEach(b => {
-    b.classList.toggle("active", b.dataset.theme === currentThemeMode());
-    b.addEventListener("click", () => applyTheme(b.dataset.theme));
-  });
 }
 
 // 手元にGPXが無い人向けのお試しサンプル。samples.json は配布先によって
@@ -462,8 +409,9 @@ runBtn.addEventListener("click", async () => {
   }
 });
 
-function summaryRow(label, value) {
-  return `<tr><th>${label}</th><td class="num">${value}</td></tr>`;
+function summaryCard(label, value, cls) {
+  return `<div class="stat-card"><span class="stat-label">${label}</span>`
+       + `<span class="stat-value${cls ? " " + cls : ""}">${value}</span></div>`;
 }
 
 // tozan/derived.py の plan_summary() が返す集計値をそのまま表示する。
@@ -473,7 +421,19 @@ function render(summary, fileName) {
   const total = summary.total;
   let html = `<h2>${fileName} の結果</h2>`;
 
+  html += `<div class="summary-grid">`;
+  html += summaryCard("所要時間", `${total.duration_h.toFixed(2)} h`);
+  html += summaryCard("距離", `${total.distance_km.toFixed(1)} km`);
+  html += summaryCard("累積標高", `↑${total.up_m.toFixed(0)} / ↓${total.down_m.toFixed(0)} m`);
+  html += summaryCard("消費エネルギー", `${total.kcal.toFixed(0)} kcal`, "consume");
+  html += summaryCard("発汗量", `${total.sweat_kg.toFixed(2)} kg`, "supply");
+  html += summaryCard("必要な水（目安）", `${total.water_L.toFixed(2)} L`, "supply");
+  html += summaryCard("必要な行動食（目安）", `${total.action_food_kcal.toFixed(0)} kcal`, "consume");
+  html += `<div class="stat-card stat-card-empty"></div>`;
+  html += `</div>`;
+
   if (days.length > 1) {
+    html += `<h3>日別内訳</h3>`;
     html += `<div class="table-scroll"><table class="daily-table"><tr><th>日</th>`
           + `<th>距離<br><span class="unit">(km)</span></th>`
           + `<th>登り<br><span class="unit">(m)</span></th>`
@@ -482,7 +442,7 @@ function render(summary, fileName) {
           + `<th>消費<br><span class="unit">(kcal)</span></th>`
           + `<th>発汗<br><span class="unit">(kg)</span></th></tr>`;
     for (const d of days) {
-      html += `<tr><td>${d.date ?? "-"}</td>`
+      html += `<tr><td>${shortDate(d.date)}</td>`
             + `<td class="num">${d.distance_km.toFixed(1)}</td>`
             + `<td class="num">${d.up_m.toFixed(0)}</td>`
             + `<td class="num">${d.down_m.toFixed(0)}</td>`
@@ -493,15 +453,6 @@ function render(summary, fileName) {
     html += `</table></div>`;
   }
 
-  html += days.length > 1 ? `<h3>全体</h3><table class="summary-table">` : `<table class="summary-table">`;
-  html += summaryRow("所要時間", `${total.duration_h.toFixed(2)} h`);
-  html += summaryRow("距離", `${total.distance_km.toFixed(1)} km`);
-  html += summaryRow("累積標高", `↑ ${total.up_m.toFixed(0)} m ／ ↓ ${total.down_m.toFixed(0)} m`);
-  html += summaryRow("消費エネルギー", `${total.kcal.toFixed(0)} kcal`);
-  html += summaryRow("発汗量", `${total.sweat_kg.toFixed(2)} kg`);
-  html += summaryRow("必要な水（目安）", `${total.water_L.toFixed(2)} L`);
-  html += summaryRow("必要な行動食（目安）", `${total.action_food_kcal.toFixed(0)} kcal`);
-  html += `</table>`;
   html += `<p class="hint">必要な水・行動食は仮の計算式です`
         + `（水=発汗量の合計、行動食=消費kcal−初期グリコーゲン量）。`
         + `モデル作成者が式を確定したら精度が上がります。</p>`;
@@ -517,6 +468,13 @@ let currentSeries = null;
 let currentSummary = null;
 let charts = {};
 
+// 日別内訳テーブルの「日」列は "2025-08-15" のままだと幅を取りすぎるので、
+// 表示だけ "8/15" に短縮する（年は同じ登山で変わらないため省略しても情報は落ちない）。
+function shortDate(dateStr) {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(dateStr || "");
+  return m ? `${parseInt(m[1], 10)}/${parseInt(m[2], 10)}` : (dateStr ?? "-");
+}
+
 function formatHM(hours) {
   const totalMin = Math.round(hours * 60);
   const hh = Math.floor(totalMin / 60);
@@ -526,6 +484,19 @@ function formatHM(hours) {
 
 function toPoints(xs, ys) {
   return xs.map((x, i) => ({ x, y: ys[i] }));
+}
+
+// 結果画面モックアップ（消費エネルギーのエリアチャート）に合わせた、
+// アクセントカラーが上から下へ透明に抜けるグラデーション塗り。
+// Chart.js のスクリプタブルオプションとして dataset.backgroundColor に渡す。
+function accentAreaFill(ctx) {
+  const { chart } = ctx;
+  const { chartArea } = chart;
+  if (!chartArea) return "rgba(233, 132, 80, 0.25)";
+  const gradient = chart.ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+  gradient.addColorStop(0, "rgba(233, 132, 80, 0.35)");
+  gradient.addColorStop(1, "rgba(233, 132, 80, 0)");
+  return gradient;
 }
 
 function destroyCharts() {
@@ -640,7 +611,7 @@ function showDay(dayIndex) {
   charts.hr = makeLineChart("chartHr",
     [
       elevationBackdrop(s),
-      { label: "心拍", data: toPoints(s.elapsed_h, s.hr_bpm), borderColor: "#dc2626" },
+      { label: "心拍", data: toPoints(s.elapsed_h, s.hr_bpm), borderColor: "#D9584F" },
     ],
     null,
     // 心拍数の生理的な範囲で固定（依頼者指定・2026-09-19）。
@@ -649,7 +620,7 @@ function showDay(dayIndex) {
   charts.pace = makeLineChart("chartPace",
     [
       elevationBackdrop(s),
-      { label: "スピード", data: toPoints(s.elapsed_h, s.speed_pct), borderColor: "#16a34a" },
+      { label: "スピード", data: toPoints(s.elapsed_h, s.speed_pct), borderColor: "#63A6A0" },
     ],
     null,
     // 30分/kmを100%とした相対速度（依頼者指定・2026-09-19、tozan/derived.py 参照）。
@@ -661,9 +632,9 @@ function showDay(dayIndex) {
     [
       elevationBackdrop(s),
       { label: "消費エネルギー(累積)", data: toPoints(s.elapsed_h, s.energy_kcal_cum),
-        borderColor: "#ea580c", yAxisID: "y" },
+        borderColor: "#E98450", backgroundColor: accentAreaFill, fill: "start", yAxisID: "y" },
       { label: "発汗量(累積)", data: toPoints(s.elapsed_h, s.sweat_L_cum),
-        borderColor: "#0891b2", yAxisID: "y1" },
+        borderColor: "#63A6A0", borderDash: [2, 3], yAxisID: "y1" },
     ],
     null,
     {
@@ -681,7 +652,7 @@ function showDay(dayIndex) {
       elevationBackdrop(s),
       // 部位別（A/B/C）は表示しない。全身合計のみ（依頼者指定・2026-09-19）。
       { label: "全身", data: toPoints(s.elapsed_h, s.glycogen_kcal),
-        borderColor: "#7c3aed", borderWidth: 3 },
+        borderColor: "#E98450", borderWidth: 3 },
     ],
     null,
     // 現行モデルの最大値（約1800kcal）に対して固定（依頼者指定・2026-09-19）。
@@ -690,7 +661,7 @@ function showDay(dayIndex) {
   charts.efficiency = makeLineChart("chartEfficiency",
     [
       elevationBackdrop(s),
-      { label: "筋効率", data: toPoints(s.elapsed_h, s.muscle_eff), borderColor: "#0d9488" },
+      { label: "筋効率", data: toPoints(s.elapsed_h, s.muscle_eff), borderColor: "#63A6A0" },
     ],
     null,
     // efficiency_up/down の既定値0.25が理論上の最大（依頼者指定・2026-09-19）。
@@ -703,11 +674,15 @@ function showDay(dayIndex) {
 
 function dayLabel(days, dayIndex) {
   const d = days[dayIndex];
-  return (d && d.date) ? d.date : `${dayIndex + 1}日目`;
+  return (d && d.date) ? shortDate(d.date) : `${dayIndex + 1}日目`;
 }
 
 function fmtDist(km) { return km == null ? "-" : `${km.toFixed(1)} km`; }
 function fmtEle(m) { return m == null ? "-" : `${m.toFixed(0)} m`; }
+
+// tozan/local_glycogen.py の部位分配（A=大腿、B=下腿、C=体幹・腕）に対応する表示名。
+const MUSCLE_PART_NAMES = { A: "大腿", B: "下腿", C: "体幹・腕" };
+function musclePartName(which) { return MUSCLE_PART_NAMES[which] ?? which; }
 
 function renderSupplyPlan(plan, days) {
   let html = `<h2>補給計画</h2>`;
@@ -715,9 +690,9 @@ function renderSupplyPlan(plan, days) {
   if (plan.warnings.length) {
     html += `<div class="warning-box"><b>グリコーゲン枯渇の警告</b><ul>`;
     for (const w of plan.warnings) {
-      html += `<li>${dayLabel(days, w.day)} ${formatHM(w.elapsed_h)}頃`
+      html += `<li>${dayLabel(days, w.day)} 出発${formatHM(w.elapsed_h)}後`
             + `（${fmtDist(w.distance_km)} / 標高${fmtEle(w.elevation_m)}）: `
-            + `部位${w.which}のグリコーゲンが残り${(w.ratio * 100).toFixed(0)}%まで低下</li>`;
+            + `${musclePartName(w.which)}のグリコーゲンが残り${(w.ratio * 100).toFixed(0)}%まで低下</li>`;
     }
     html += `</ul></div>`;
   }
@@ -726,7 +701,7 @@ function renderSupplyPlan(plan, days) {
   // （依頼者指定・2026-09-19）。
   if (plan.daily.length) {
     html += `<div class="table-scroll"><table class="supply-table"><tr><th>日</th>`
-          + `<th>グリコーゲン消費<br><span class="unit">(kcal)</span></th>`
+          + `<th>Glycogen<br><span class="unit">(kcal)</span></th>`
           + `<th>脂肪燃焼<br><span class="unit">(kcal)</span></th>`
           + `<th>行動食<br><span class="unit">(kcal)</span></th>`
           + `<th>山頂補給<br><span class="unit">(kcal)</span></th></tr>`;

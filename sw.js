@@ -2,7 +2,7 @@
 // オフラインで起動できるようにする。要件1（山中は圏外）の実現手段。
 //
 // アプリを更新したら CACHE_VERSION を上げること。古いキャッシュは activate 時に破棄する。
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v6";
 const CACHE_NAME = `tozan-app-shell-${CACHE_VERSION}`;
 
 // 必須のアプリ本体一式。1つでも取得できなければ install 自体を失敗させ、
@@ -16,6 +16,7 @@ const REQUIRED_ASSETS = [
   "icons/icon-512.png",
   "icons/icon-512-maskable.png",
   "icons/apple-touch-icon.png",
+  "img/hero.jpg",
   "vendor/chart.umd.js",
   "core.zip",
 ];
@@ -88,8 +89,9 @@ self.addEventListener("fetch", (event) => {
 
       try {
         const res = await fetch(req);
-        // Pyodide本体はCDN（別オリジン）から読み込んでいる。オフライン対応の
-        // ためにはこれもキャッシュする必要があるので、opaqueレスポンス
+        // Pyodide本体・Google Fonts（Space Grotesk / IBM Plex）はCDN
+        // （別オリジン）から読み込んでいる。オフライン対応のためにはこれも
+        // キャッシュする必要があるので、opaqueレスポンス
         // （CORS未許可のクロスオリジン応答）も含めて保存する。
         if (res && (res.ok || res.type === "opaque")) {
           const cache = await caches.open(CACHE_NAME);

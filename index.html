@@ -7,22 +7,25 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<meta name="theme-color" content="#083c44">
+<meta name="theme-color" content="#0A0E1B">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans+JP:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 
-<h1>登山エネルギー計算</h1>
-<p class="sub">
-  GPXルートを選ぶと、所要時間・消費エネルギー・発汗量を計算します。
-  実測時刻は使いません（緯度・経度・標高だけで所要時間を予測します）。
-</p>
-
-<div id="themeToggle" class="theme-toggle">
-  <button type="button" data-theme="auto">自動</button>
-  <button type="button" data-theme="light">ライト</button>
-  <button type="button" data-theme="dark">ダーク</button>
-</div>
+<header class="hero">
+  <div class="hero-bg" style="background-image: url('img/hero.jpg')"></div>
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <h1>登山エネルギー計算</h1>
+    <p class="sub">
+      GPXルートを選ぶと、所要時間・消費エネルギー・発汗量を計算します。
+      実測時刻は使いません（緯度・経度・標高だけで所要時間を予測します）。
+    </p>
+  </div>
+</header>
 
 <div id="status">Pyodide を準備しています...</div>
 
