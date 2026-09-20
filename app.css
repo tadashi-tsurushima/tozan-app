@@ -1,0 +1,133 @@
+:root { color-scheme: light dark; --chart-fg: #1a1a1a; --body-bg: #e6e6e6; }
+:root[data-theme="light"] { color-scheme: light; --chart-fg: #1a1a1a; --body-bg: #e6e6e6; }
+:root[data-theme="dark"] { color-scheme: dark; --chart-fg: #f0f0f0; --body-bg: Canvas; }
+/* prefers-color-scheme は「自動」時（data-theme 未指定）だけ効かせる。
+   Chart.js は canvas に自前で描画するため、CanvasText 等のシステム色を
+   getComputedStyle で読んでも反映タイミングが不安定だった。
+   グラフの文字色だけは、このカスタムプロパティを直接読んで確定させる。
+   背景色はライトのとき真っ白だと眩しいという指摘があったので、
+   ライトだけ薄いグレーに固定する（ダークは従来どおりシステム任せ）。
+   （依頼者指定・2026-09-19） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --chart-fg: #f0f0f0; --body-bg: Canvas; }
+}
+body {
+  font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN",
+               "Yu Gothic", Meiryo, sans-serif;
+  margin: 0; padding: 16px; line-height: 1.7;
+  max-width: 760px; margin-inline: auto;
+  background: var(--body-bg);
+}
+h1 { font-size: 1.25rem; margin: 0 0 4px; }
+.sub { font-size: 0.85rem; opacity: 0.7; margin: 0 0 20px; }
+input[type="file"] {
+  width: 100%; box-sizing: border-box; padding: 10px;
+  border-radius: 10px; border: 1px solid currentColor;
+  background: transparent; color: inherit; margin-bottom: 12px;
+}
+button {
+  font-size: 1.05rem; padding: 14px 20px; width: 100%;
+  border-radius: 10px; border: 1px solid currentColor;
+  background: transparent; color: inherit; cursor: pointer;
+  margin-bottom: 12px;
+}
+button.secondary { font-size: 0.9rem; padding: 10px 16px; opacity: 0.8; }
+button:disabled { opacity: 0.45; cursor: default; }
+#status {
+  padding: 12px 14px; border-radius: 8px;
+  border: 1px solid rgba(128,128,128,0.4);
+  font-size: 0.95rem; margin-bottom: 16px;
+  white-space: pre-wrap; word-break: break-word;
+}
+table { width: 100%; border-collapse: collapse; font-size: 0.92rem; margin: 8px 0 20px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid rgba(128,128,128,0.28); }
+th { font-weight: 600; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* 全体サマリー（ラベル/値の2列）: ラベル列を広めに固定 */
+table.summary-table th { width: 44%; }
+table.summary-table td { width: 56%; }
+
+/* 日別内訳（7列）・補給計画（6列）: 列幅を固定して割り付けると、
+   スマホの文字サイズを大きくした環境で1列に単語すら入らず、
+   1文字ずつ改行される（縦書き状態になる）不具合があった。
+   列幅の固定はやめ、.table-scroll で横スクロールに逃がす。 */
+.table-scroll { overflow-x: auto; margin: 8px 0 20px; }
+.table-scroll table { margin: 0; }
+table.daily-table th, table.daily-table td,
+table.supply-table th, table.supply-table td { white-space: nowrap; }
+table.daily-table th .unit, table.supply-table th .unit {
+  display: block; font-size: 0.78em; font-weight: 400; opacity: 0.65;
+  text-align: center;
+}
+table.supply-table tr.supply-peak { background: rgba(255, 193, 7, 0.15); font-weight: 600; }
+/* 消費側（グリコーゲン消費・脂肪燃焼）と補給側（行動食・山頂補給）を
+   結果グラフの配色（消費エネルギー=オレンジ／発汗量=水色）に揃える
+   （依頼者指定・2026-09-19）。 */
+table.supply-table td.consume { color: #ea580c; }
+table.supply-table td.supply { color: #0891b2; }
+
+.warning-box {
+  border: 1px solid #c1121f; border-radius: 8px; padding: 10px 14px;
+  margin: 8px 0 16px; background: rgba(193, 18, 31, 0.10);
+}
+.warning-box b { color: #c1121f; }
+.warning-box ul { margin: 6px 0 0; padding-left: 20px; font-size: 0.88rem; }
+h2 { font-size: 1.02rem; margin: 24px 0 4px; padding-top: 14px;
+     border-top: 2px solid rgba(128,128,128,0.3); }
+h3 { font-size: 0.92rem; margin: 16px 0 4px; opacity: 0.85; }
+.ok { color: #1a7f37; font-weight: 600; }
+.ng { color: #c1121f; font-weight: 600; }
+.hint { font-size: 0.85rem; opacity: 0.75; }
+
+/* 条件入力フォーム（Step 5-2） */
+fieldset { border: 1px solid rgba(128,128,128,0.3); border-radius: 10px; padding: 12px 14px; margin: 0 0 16px; }
+legend { font-size: 0.95rem; font-weight: 600; padding: 0 6px; }
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 0.9rem; margin-bottom: 4px; }
+.field input[type="number"], .field select {
+  width: 100%; box-sizing: border-box; padding: 8px 10px;
+  border-radius: 8px; border: 1px solid currentColor;
+  background: transparent; color: inherit; font-size: 1rem;
+}
+.field input.err, .field select.err { border-color: #c1121f; }
+.field-checkbox label { display: flex; align-items: center; gap: 8px; }
+.field .unit { opacity: 0.65; font-weight: 400; }
+.field .desc { font-size: 0.8rem; opacity: 0.65; margin-top: 3px; }
+.field .err-msg { font-size: 0.82rem; color: #c1121f; margin-top: 3px; min-height: 1em; }
+details { margin-bottom: 12px; }
+summary { cursor: pointer; font-size: 0.95rem; font-weight: 600; padding: 6px 0; }
+
+/* 結果グラフ（Step 5-4） */
+.day-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.day-tabs button {
+  width: auto; margin-bottom: 0; padding: 8px 12px; font-size: 0.85rem;
+  border-radius: 8px;
+}
+.day-tabs button.active { background: CanvasText; color: Canvas; border-color: CanvasText; }
+
+/* 表示テーマの手動切り替え（自動＝端末の設定に追従 / ライト・ダーク固定） */
+.theme-toggle { display: flex; gap: 6px; margin: 0 0 16px; }
+.theme-toggle button {
+  width: auto; margin-bottom: 0; padding: 6px 12px; font-size: 0.82rem;
+  border-radius: 8px;
+}
+.theme-toggle button.active { background: CanvasText; color: Canvas; border-color: CanvasText; }
+
+/* 選択中の日の要約（山行時間・消費エネルギー・発汗量、依頼者指定・2026-09-19）
+   3つ全体を1つの枠で囲む。消費エネルギー=オレンジ／発汗量=水色は
+   結果グラフ・補給計画の表と同じ配色に揃える。 */
+.day-stats {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  border: 1px solid currentColor; border-radius: 10px;
+  padding: 10px 14px; margin: 0 0 12px;
+}
+.day-stat { flex: 1 1 0; min-width: 90px; text-align: center; }
+.day-stat-label { display: block; font-size: 0.78rem; opacity: 0.7; }
+.day-stat-value { display: block; font-size: 1.15rem; font-weight: 700; }
+.day-stat-value.consume { color: #ea580c; }
+.day-stat-value.supply { color: #0891b2; }
+/* Chart.js は canvas 自身ではなく「親要素のサイズ」を見て内部解像度を決める。
+   canvas に直接 CSS で高さを強制すると、内部の描画バッファと表示サイズが
+   食い違ってぼやける（文字も線も）。高さの制約はラッパー側に持たせる。 */
+.chart-wrap { position: relative; width: 100%; height: 187px; margin-bottom: 8px; }

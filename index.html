@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登山エネルギー計算（計画モード）</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#083c44">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<h1>登山エネルギー計算</h1>
+<p class="sub">
+  GPXルートを選ぶと、所要時間・消費エネルギー・発汗量を計算します。
+  実測時刻は使いません（緯度・経度・標高だけで所要時間を予測します）。
+</p>
+
+<div id="themeToggle" class="theme-toggle">
+  <button type="button" data-theme="auto">自動</button>
+  <button type="button" data-theme="light">ライト</button>
+  <button type="button" data-theme="dark">ダーク</button>
+</div>
+
+<div id="status">Pyodide を準備しています...</div>
+
+<input type="file" id="gpxFile" accept=".gpx" disabled>
+
+<fieldset>
+  <legend>条件入力</legend>
+  <div id="userFields"></div>
+  <details>
+    <summary>詳細設定</summary>
+    <div id="advancedFields"></div>
+  </details>
+  <button type="button" id="resetParams" class="secondary">既定値に戻す</button>
+</fieldset>
+
+<button id="run" disabled>計算する</button>
+
+<div id="out"></div>
+
+<div id="dayTabs" class="day-tabs" hidden></div>
+<div id="dayStats" class="day-stats" hidden></div>
+<div id="charts" hidden>
+  <h2>心拍</h2><div class="chart-wrap"><canvas id="chartHr"></canvas></div>
+  <h2>スピード</h2><div class="chart-wrap"><canvas id="chartPace"></canvas></div>
+  <h2>エネルギー消費量・発汗量</h2><div class="chart-wrap"><canvas id="chartEnergy"></canvas></div>
+  <h2>体内グリコーゲン量</h2><div class="chart-wrap"><canvas id="chartGlycogen"></canvas></div>
+  <h2>筋効率</h2><div class="chart-wrap"><canvas id="chartEfficiency"></canvas></div>
+</div>
+
+<div id="supplyPlan"></div>
+
+<script src="vendor/chart.umd.js"></script>
+<script src="app.js"></script>
+<script>
+// Service Worker は HTTPS か localhost でしか有効にならない（LAN の http では
+// 登録に失敗するが、それは想定内。構想書 §6 Step 1.5 参照）。
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch((err) => {
+      console.warn("Service Worker registration failed:", err);
+    });
+  });
+}
+</script>
+</body>
+</html>

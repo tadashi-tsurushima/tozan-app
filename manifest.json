@@ -1,0 +1,16 @@
+{
+  "name": "登山エネルギー計算",
+  "short_name": "登山計算",
+  "description": "GPXルートから所要時間・消費エネルギー・発汗量を予測します。実測時刻は使いません。",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#e6e6e6",
+  "theme_color": "#083c44",
+  "lang": "ja",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
