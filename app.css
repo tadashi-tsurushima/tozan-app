@@ -204,6 +204,13 @@ legend {
   font-family: "IBM Plex Mono", monospace;
 }
 .field select { font-family: "IBM Plex Sans JP", sans-serif; }
+/* ネイティブの<select>ポップアップは、ブラウザによってはcolor-scheme:darkの
+   既定色（背景・文字とも中間グレー寄り）で描画され、ホバー中の項目以外が
+   読みにくくなる。<option>に直接指定して見た目を揃える。 */
+.field select option {
+  background: var(--bg-panel);
+  color: var(--text);
+}
 .field input.err, .field select.err { border-bottom-color: var(--warn); }
 .field-checkbox label { display: flex; align-items: center; gap: 8px; }
 .field .unit { opacity: 0.8; font-weight: 400; color: var(--text-muted); font-family: "IBM Plex Sans JP", sans-serif; }

@@ -9,12 +9,17 @@
 const VERSIONS = ["0.28.0", "0.27.7", "0.27.5", "0.27.2", "0.26.4", "0.25.1"];
 const CDN = v => `https://cdn.jsdelivr.net/pyodide/v${v}/full/`;
 const STORAGE_KEY = "tozan_params_v1";
+// 「現在の値を規定値に設定」で保存する、ユーザー自身のカスタム既定値。
+// STORAGE_KEY（入力するたびに自動保存される最後の入力値）とは別物で、
+// 「既定値に戻す」ボタンが戻る先をこちらに変える。
+const CUSTOM_DEFAULTS_KEY = "tozan_custom_defaults_v1";
 
 const statusEl = document.getElementById("status");
 const outEl = document.getElementById("out");
 const fileEl = document.getElementById("gpxFile");
 const runBtn = document.getElementById("run");
 const resetBtn = document.getElementById("resetParams");
+const saveAsDefaultBtn = document.getElementById("saveAsDefault");
 const userFieldsEl = document.getElementById("userFields");
 const advancedFieldsEl = document.getElementById("advancedFields");
 const dayTabsEl = document.getElementById("dayTabs");
@@ -218,6 +223,7 @@ async function boot() {
     formSpecFn.destroy();
 
     buildForm(formFields);
+    applyDefaultsToForm(loadCustomDefaults());
     restoreFormValues();
 
     fileEl.disabled = false;
@@ -233,10 +239,13 @@ async function boot() {
 // ペースの4段階選択にする（依頼者指定・2026-09-19）。値そのもの（%）は
 // contract/params.json の vo2_usage_ratio のまま、UIの見せ方だけを変える。
 const VO2_PACE_OPTIONS = [
-  { value: 70, label: "速い" },
-  { value: 60, label: "やや速い" },
-  { value: 50, label: "普通" },
-  { value: 45, label: "のんびり" },
+  { value: 70, label: "速い (200%)" },
+  { value: 65, label: "かなり速い (175%)" },
+  { value: 60, label: "やや速い (150%)" },
+  { value: 55, label: "ちょっと速い (125%)" },
+  { value: 52, label: "気持ち速い (110%)" },
+  { value: 50, label: "普通 (100%)" },
+  { value: 45, label: "のんびり (80-90%)" },
 ];
 
 function fieldInputHtml(spec) {
@@ -336,15 +345,50 @@ function restoreFormValues() {
   }
 }
 
-function resetFormToDefaults() {
+function loadCustomDefaults() {
+  try {
+    return JSON.parse(localStorage.getItem(CUSTOM_DEFAULTS_KEY) || "{}");
+  } catch (e) {
+    return {};
+  }
+}
+
+// ユーザーが「現在の値を規定値に設定」で保存したカスタム既定値があれば
+// そちらを優先し、無い項目はアプリ本来の既定値（contract/params.json）を使う。
+// 初期表示（restoreFormValuesで最後の入力値が上書きされる前のベース）と
+// 「既定値に戻す」の両方から使う共通処理。
+function applyDefaultsToForm(customDefaults) {
   for (const spec of formFields) {
     const el = document.getElementById(`f_${spec.key}`);
     if (!el) continue;
-    if (spec.type === "boolean") el.checked = !!spec.default;
-    else el.value = spec.default;
+    const hasCustom = Object.prototype.hasOwnProperty.call(customDefaults, spec.key);
+    const value = hasCustom ? customDefaults[spec.key] : spec.default;
+    if (spec.type === "boolean") el.checked = !!value;
+    else el.value = value;
   }
+}
+
+function resetFormToDefaults() {
+  applyDefaultsToForm(loadCustomDefaults());
   clearFieldErrors();
   try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+}
+
+// 現在の入力値をカスタム既定値として保存する。1回のクリックで既定値が
+// 書き変わってしまうと危険なため、確認ダイアログを必ず挟む
+// （依頼者指定・2026-09-20）。
+function saveCurrentAsDefault() {
+  const ok = confirm(
+    "現在の入力値を、今後「既定値に戻す」で戻る先の値として保存します。\n" +
+    "よろしいですか？"
+  );
+  if (!ok) return;
+  try {
+    localStorage.setItem(CUSTOM_DEFAULTS_KEY, JSON.stringify(collectFormValues()));
+    alert("現在の値を規定値として保存しました。");
+  } catch (e) {
+    alert("保存に失敗しました（ブラウザの設定でlocalStorageが使えない可能性があります）。");
+  }
 }
 
 document.addEventListener("input", (e) => {
@@ -355,6 +399,7 @@ document.addEventListener("change", (e) => {
 });
 
 resetBtn.addEventListener("click", resetFormToDefaults);
+saveAsDefaultBtn.addEventListener("click", saveCurrentAsDefault);
 
 fileEl.addEventListener("change", () => {
   runBtn.disabled = !fileEl.files.length;
