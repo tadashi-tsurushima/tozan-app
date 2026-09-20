@@ -31,6 +31,7 @@ const dayStatsEl = document.getElementById("dayStats");
 const chartsEl = document.getElementById("charts");
 const supplyPlanEl = document.getElementById("supplyPlan");
 const themeToggleEl = document.getElementById("themeToggle");
+const sampleGpxEl = document.getElementById("sampleGpx");
 
 // Chart.js の既定文字色・グリッド色はダークテーマだと黒背景に対してコントラストが
 // 低く、目盛り・軸タイトル・凡例が読めなくなる。app.css の --chart-fg
@@ -85,6 +86,26 @@ if (themeToggleEl) {
     b.addEventListener("click", () => applyTheme(b.dataset.theme));
   });
 }
+
+// 手元にGPXが無い人向けのお試しサンプル。samples.json は配布先によって
+// 同梱の有無が変わる（開発用ビルドには無い）ので、無ければ何も表示しない。
+async function loadSampleGpx() {
+  if (!sampleGpxEl) return;
+  try {
+    const res = await fetch("samples.json");
+    if (!res.ok) return;
+    const samples = await res.json();
+    if (!Array.isArray(samples) || !samples.length) return;
+    const links = samples
+      .map(s => `<a href="${s.file}" download>${s.name}</a>`)
+      .join(" ・ ");
+    sampleGpxEl.innerHTML = `<span class="hint">GPXをお持ちでない場合はサンプルをどうぞ: ${links}</span>`;
+    sampleGpxEl.hidden = false;
+  } catch (e) {
+    // samples.json が無い/読めない環境では何も表示しない
+  }
+}
+loadSampleGpx();
 
 function setStatus(msg, cls) {
   statusEl.innerHTML = msg;
