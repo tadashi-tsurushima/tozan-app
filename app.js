@@ -89,6 +89,8 @@ if (themeToggleEl) {
 
 // 手元にGPXが無い人向けのお試しサンプル。samples.json は配布先によって
 // 同梱の有無が変わる（開発用ビルドには無い）ので、無ければ何も表示しない。
+// クリックしたらダウンロードさせるのではなく、その場でファイル選択欄に
+// 読み込ませる（＝自分でファイルを選んだのと同じ状態にする）。
 async function loadSampleGpx() {
   if (!sampleGpxEl) return;
   try {
@@ -97,10 +99,28 @@ async function loadSampleGpx() {
     const samples = await res.json();
     if (!Array.isArray(samples) || !samples.length) return;
     const links = samples
-      .map(s => `<a href="${s.file}" download>${s.name}</a>`)
+      .map((s, i) => `<a href="#" data-sample-index="${i}">${s.name}</a>`)
       .join(" ・ ");
     sampleGpxEl.innerHTML = `<span class="hint">GPXをお持ちでない場合はサンプルをどうぞ: ${links}</span>`;
     sampleGpxEl.hidden = false;
+
+    sampleGpxEl.querySelectorAll("a[data-sample-index]").forEach((a) => {
+      a.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        const sample = samples[parseInt(a.dataset.sampleIndex, 10)];
+        try {
+          const gpxRes = await fetch(sample.file);
+          const blob = await gpxRes.blob();
+          const file = new File([blob], sample.file, { type: "application/gpx+xml" });
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          fileEl.files = dt.files;
+          fileEl.dispatchEvent(new Event("change"));
+        } catch (err) {
+          setStatus(`サンプルの読み込みに失敗しました: ${err}`, "ng");
+        }
+      });
+    });
   } catch (e) {
     // samples.json が無い/読めない環境では何も表示しない
   }
