@@ -40,10 +40,15 @@ h1, h2, h3, legend, summary {
    高さを固定にすると写真（1090x601）の縦横比とずれて、cover では
    稜線が切れ、contain では左右に余白が出てしまう。aspect-ratio を
    写真そのものの比率に合わせることで、切り抜きも余白も出さずに
-   写真全体をそのまま使う。 */
+   写真全体をそのまま使う。
+   ただしスマホ幅（400px前後）だと aspect-ratio だけでは高さが
+   110px程度まで縮み、タイトル+説明文が収まらず上端が overflow:hidden
+   で切れてしまう（PC幅では偶然収まっていたため気づけなかった）。
+   min-height で下限を確保する。 */
 .hero {
   position: relative;
   aspect-ratio: 1090 / 300;
+  min-height: 215px;
   margin: -16px -16px 20px;
   overflow: hidden;
   background: var(--bg);
