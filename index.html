@@ -39,8 +39,10 @@
     <summary>詳細設定</summary>
     <div id="advancedFields"></div>
   </details>
-  <button type="button" id="resetParams" class="secondary">既定値に戻す</button>
-  <button type="button" id="saveAsDefault" class="secondary">現在の値を規定値に設定</button>
+  <div class="btn-row">
+    <button type="button" id="saveAsDefault" class="secondary">現在の値を規定値に設定</button>
+    <button type="button" id="resetParams" class="secondary">既定値に戻す</button>
+  </div>
 </fieldset>
 
 <button id="run" disabled>計算する</button>
@@ -52,7 +54,6 @@
 <div id="charts" hidden>
   <h2>心拍</h2><div class="chart-wrap"><canvas id="chartHr"></canvas></div>
   <h2>スピード</h2><div class="chart-wrap"><canvas id="chartPace"></canvas></div>
-  <h2>エネルギー消費量・発汗量</h2><div class="chart-wrap"><canvas id="chartEnergy"></canvas></div>
   <h2>体内グリコーゲン量</h2><div class="chart-wrap"><canvas id="chartGlycogen"></canvas></div>
   <h2>筋効率</h2><div class="chart-wrap"><canvas id="chartEfficiency"></canvas></div>
 </div>

@@ -469,11 +469,6 @@ runBtn.addEventListener("click", async () => {
   }
 });
 
-function summaryCard(label, value, cls) {
-  return `<div class="stat-card"><span class="stat-label">${label}</span>`
-       + `<span class="stat-value${cls ? " " + cls : ""}">${value}</span></div>`;
-}
-
 // tozan/derived.py の plan_summary() が返す集計値をそのまま表示する。
 // 単位換算・合計計算はすべて Python 側で済んでいる。
 function render(summary, fileName) {
@@ -481,16 +476,20 @@ function render(summary, fileName) {
   const total = summary.total;
   let html = `<h2>${fileName} の結果</h2>`;
 
-  html += `<div class="summary-grid">`;
-  html += summaryCard("所要時間", `${total.duration_h.toFixed(2)} h`);
-  html += summaryCard("距離", `${total.distance_km.toFixed(1)} km`);
-  html += summaryCard("累積標高", `↑${total.up_m.toFixed(0)} / ↓${total.down_m.toFixed(0)} m`);
-  html += summaryCard("消費エネルギー", `${total.kcal.toFixed(0)} kcal`, "consume");
-  html += summaryCard("発汗量", `${total.sweat_kg.toFixed(2)} kg`, "supply");
-  html += summaryCard("必要な水（目安）", `${total.water_L.toFixed(2)} L`, "supply");
-  html += summaryCard("必要な行動食（目安）", `${total.action_food_kcal.toFixed(0)} kcal`, "consume");
-  html += `<div class="stat-card stat-card-empty"></div>`;
-  html += `</div>`;
+  // 山行全体のトータルは、YAMAPの表示にならい「タイム・距離・のぼり・くだり」の
+  // 1行4列だけにする（作者指定・2026-09-22、実機確認のフィードバック）。
+  // 消費エネルギー・発汗量は合計を見ても意味が薄く、日ごとの値（day-stats・
+  // 日別内訳）のほうが大事なのでここには出さない。
+  html += `<div class="day-stats cols-4">
+    <div class="day-stat"><span class="day-stat-label">タイム</span>`
+      + `<span class="day-stat-value">${formatHoursJa(total.duration_h)}</span></div>
+    <div class="day-stat"><span class="day-stat-label">距離</span>`
+      + `<span class="day-stat-value">${total.distance_km.toFixed(1)} km</span></div>
+    <div class="day-stat"><span class="day-stat-label">のぼり</span>`
+      + `<span class="day-stat-value">↑${total.up_m.toFixed(0)} m</span></div>
+    <div class="day-stat"><span class="day-stat-label">くだり</span>`
+      + `<span class="day-stat-value">↓${total.down_m.toFixed(0)} m</span></div>
+  </div>`;
 
   if (days.length > 1) {
     html += `<h3>日別内訳</h3>`;
@@ -498,7 +497,7 @@ function render(summary, fileName) {
           + `<th>距離<br><span class="unit">(km)</span></th>`
           + `<th>登り<br><span class="unit">(m)</span></th>`
           + `<th>下り<br><span class="unit">(m)</span></th>`
-          + `<th>所要時間<br><span class="unit">(h)</span></th>`
+          + `<th>所要時間</th>`
           + `<th>消費<br><span class="unit">(kcal)</span></th>`
           + `<th>発汗<br><span class="unit">(kg)</span></th></tr>`;
     for (const d of days) {
@@ -506,7 +505,7 @@ function render(summary, fileName) {
             + `<td class="num">${d.distance_km.toFixed(1)}</td>`
             + `<td class="num">${d.up_m.toFixed(0)}</td>`
             + `<td class="num">${d.down_m.toFixed(0)}</td>`
-            + `<td class="num">${d.duration_h.toFixed(2)}</td>`
+            + `<td class="num">${formatHoursJa(d.duration_h)}</td>`
             + `<td class="num">${d.kcal.toFixed(0)}</td>`
             + `<td class="num">${d.sweat_kg.toFixed(2)}</td></tr>`;
     }
@@ -542,21 +541,17 @@ function formatHM(hours) {
   return `${hh}:${String(mm).padStart(2, "0")}`;
 }
 
-function toPoints(xs, ys) {
-  return xs.map((x, i) => ({ x, y: ys[i] }));
+// 所要時間・休憩時間の表示形式。「X.XX h」だと分かりにくいので「X時間XX分」に
+// する（作者指定・2026-09-22、実機確認のフィードバック）。
+function formatHoursJa(hours) {
+  const totalMin = Math.round(hours * 60);
+  const hh = Math.floor(totalMin / 60);
+  const mm = totalMin % 60;
+  return `${hh}時間${String(mm).padStart(2, "0")}分`;
 }
 
-// 結果画面モックアップ（消費エネルギーのエリアチャート）に合わせた、
-// アクセントカラーが上から下へ透明に抜けるグラデーション塗り。
-// Chart.js のスクリプタブルオプションとして dataset.backgroundColor に渡す。
-function accentAreaFill(ctx) {
-  const { chart } = ctx;
-  const { chartArea } = chart;
-  if (!chartArea) return "rgba(233, 132, 80, 0.25)";
-  const gradient = chart.ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-  gradient.addColorStop(0, "rgba(233, 132, 80, 0.35)");
-  gradient.addColorStop(1, "rgba(233, 132, 80, 0)");
-  return gradient;
+function toPoints(xs, ys) {
+  return xs.map((x, i) => ({ x, y: ys[i] }));
 }
 
 function destroyCharts() {
@@ -653,13 +648,20 @@ function buildDayTabs(days) {
 function renderDayStats(dayIndex) {
   const d = currentSummary.days[dayIndex];
   dayStatsEl.hidden = false;
+  // 2行3列（左上→右下の順）。作者指定・2026-09-22、実機確認のフィードバック。
   dayStatsEl.innerHTML = `
-    <div class="day-stat"><span class="day-stat-label">行動時間</span>`
-      + `<span class="day-stat-value">${d.duration_h.toFixed(2)} h</span></div>
-    <div class="day-stat"><span class="day-stat-label">消費エネルギー</span>`
+    <div class="day-stat"><span class="day-stat-label">行動時間(TOTAL)</span>`
+      + `<span class="day-stat-value">${formatHoursJa(d.duration_h)}</span></div>
+    <div class="day-stat"><span class="day-stat-label">休憩時間</span>`
+      + `<span class="day-stat-value">${formatHoursJa(d.rest_h)}</span></div>
+    <div class="day-stat"><span class="day-stat-label">移動距離</span>`
+      + `<span class="day-stat-value">${d.distance_km.toFixed(1)} km</span></div>
+    <div class="day-stat"><span class="day-stat-label">消費カロリー</span>`
       + `<span class="day-stat-value consume">${d.kcal.toFixed(0)} kcal</span></div>
     <div class="day-stat"><span class="day-stat-label">発汗量</span>`
-      + `<span class="day-stat-value supply">${d.sweat_kg.toFixed(2)} L</span></div>`;
+      + `<span class="day-stat-value supply">${d.sweat_kg.toFixed(2)} L</span></div>
+    <div class="day-stat"><span class="day-stat-label">累積標高</span>`
+      + `<span class="day-stat-value day-stat-value-elev">↑${d.up_m.toFixed(0)}m<br>↓${d.down_m.toFixed(0)}m</span></div>`;
 }
 
 function showDay(dayIndex) {
@@ -686,31 +688,18 @@ function showDay(dayIndex) {
     // 相対速度(%)表示（2026-09-19）から分/km表示に戻した（依頼者指定・2026-09-20）。
     { y: { title: { display: true, text: "ペース [分/km]" }, min: 0, max: 50 } }, 1);
 
-  charts.energy = makeLineChart("chartEnergy",
-    [
-      elevationBackdrop(s),
-      { label: "消費エネルギー(累積)", data: toPoints(s.elapsed_h, s.energy_kcal_cum),
-        borderColor: "#E98450", backgroundColor: accentAreaFill, fill: "start", yAxisID: "y" },
-      { label: "発汗量(累積)", data: toPoints(s.elapsed_h, s.sweat_L_cum),
-        borderColor: "#63A6A0", borderDash: [2, 3], yAxisID: "y1" },
-    ],
-    null,
-    {
-      // 1日の行動時間・強度に対して十分な上限を固定（依頼者指定・2026-09-19）。
-      y: { position: "left", title: { display: true, text: "消費エネルギー [kcal]" }, min: 0, max: 5000 },
-      y1: { position: "right", title: { display: true, text: "発汗量 [L]" }, grid: { drawOnChartArea: false },
-            min: 0, max: 5 },
-      // このグラフだけ軸が3本になりプロット部分が他グラフより狭くなるため、
-      // 標高軸は目盛り非表示にする（背景の塗りつぶし自体は残す・依頼者指定 2026-09-19）。
-      yElevation: { display: false, min: 0, max: 3200 },
-    }, 2);
+  // エネルギー消費量・発汗量のグラフは削除（作者指定・2026-09-22、実機確認の
+  // フィードバック。最終値は day-stats に表示済みなのでグラフは不要）。
 
   charts.glycogen = makeLineChart("chartGlycogen",
     [
       elevationBackdrop(s),
-      // 部位別（A/B/C）は表示しない。全身合計のみ（依頼者指定・2026-09-19）。
+      // 部位別（A/B/C）は表示しない。全身合計と肝臓のみ（依頼者指定・2026-09-19、
+      // 肝臓は2026-09-22追加。しゃりばては肝が空になることで起きるため）。
       { label: "全身", data: toPoints(s.elapsed_h, s.glycogen_kcal),
         borderColor: "#E98450", borderWidth: 3 },
+      { label: "肝臓", data: toPoints(s.elapsed_h, s.glycogen_liver_kcal),
+        borderColor: "#63A6A0", borderWidth: 2 },
     ],
     null,
     // 縦軸の上限は容量（体重・体脂肪率から決まる。tozan/derived.py の

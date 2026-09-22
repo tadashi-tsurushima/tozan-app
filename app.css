@@ -105,6 +105,11 @@ button.secondary {
 }
 button:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
 
+/* 「現在の値を規定値に設定」「既定値に戻す」を横並びにする（押し間違い防止。
+   作者指定・2026-09-22、実機確認のフィードバック）。 */
+.btn-row { display: flex; gap: 8px; }
+.btn-row button.secondary { flex: 1 1 0; width: auto; }
+
 #status {
   padding: 12px 14px; border-radius: var(--radius);
   background: var(--bg-panel);
@@ -121,24 +126,8 @@ td.num {
   font-family: "IBM Plex Mono", monospace;
 }
 
-/* 全体サマリー（結果画面モックアップ準拠のカード型2列グリッド）。
-   奇数個（7項目）になるため、最後に空セルを1つ足して2列のリズムを保つ。 */
-.summary-grid {
-  display: grid; grid-template-columns: 1fr 1fr;
-  border: 1px solid var(--border); border-radius: var(--radius);
-  background: var(--bg-panel); margin: 8px 0 20px; overflow: hidden;
-}
-.stat-card { padding: 12px 16px; border-bottom: 1px solid var(--border); }
-.stat-card:nth-child(odd) { border-right: 1px solid var(--border); }
-.stat-card:nth-last-child(-n+2) { border-bottom: none; }
-.stat-card-empty { background: rgba(255, 255, 255, 0.02); }
-.stat-label { display: block; font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; }
-.stat-value {
-  display: block; font-size: 1.25rem; font-weight: 600;
-  font-family: "IBM Plex Mono", monospace;
-}
-.stat-value.consume { color: var(--accent); }
-.stat-value.supply { color: var(--accent2); }
+/* 全体サマリー（タイム・距離・のぼり・くだり）は .day-stats.cols-4 を使う
+   （2026-09-22。旧 .summary-grid/.stat-card は廃止）。 */
 
 /* 日別内訳（7列）・補給計画（6列）: 列幅を固定して割り付けると、
    スマホの文字サイズを大きくした環境で1列に単語すら入らず、
@@ -227,16 +216,19 @@ summary { cursor: pointer; font-size: 0.95rem; font-weight: 600; padding: 6px 0;
 }
 .day-tabs button.active { background: var(--accent); color: #1a1004; border-color: var(--accent); }
 
-/* 選択中の日の要約（山行時間・消費エネルギー・発汗量、依頼者指定・2026-09-19）
-   3つ全体を1つの枠で囲む。消費エネルギー=accent／発汗量=accent2 は
-   結果グラフ・補給計画の表と同じ配色に揃える。 */
+/* 選択中の日の要約。2行3列で固定表示（作者指定・2026-09-22、実機確認の
+   フィードバック）。消費エネルギー=accent／発汗量=accent2 は結果グラフ・
+   補給計画の表と同じ配色に揃える。 */
 .day-stats {
-  display: flex; flex-wrap: wrap; gap: 8px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 4px;
   border: 1px solid var(--border); border-radius: var(--radius);
   background: var(--bg-panel);
   padding: 10px 14px; margin: 0 0 12px;
 }
-.day-stat { flex: 1 1 0; min-width: 90px; text-align: center; }
+/* 山行全体のトータル（タイム・距離・のぼり・くだり）用、1行4列
+   （作者指定・2026-09-22）。 */
+.day-stats.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.day-stat { text-align: center; }
 .day-stat-label { display: block; font-size: 0.78rem; color: var(--text-muted); }
 .day-stat-value {
   display: block; font-size: 1.15rem; font-weight: 600;
@@ -244,6 +236,9 @@ summary { cursor: pointer; font-size: 0.95rem; font-weight: 600; padding: 6px 0;
 }
 .day-stat-value.consume { color: var(--accent); }
 .day-stat-value.supply { color: var(--accent2); }
+/* 累積標高（登り/下り）は2行で表示するため、他のセルより一段小さくする
+   （スマホ実機確認のフィードバック・2026-09-22。折り返しで不揃いになっていた）。 */
+.day-stat-value-elev { font-size: 0.95rem; line-height: 1.35; }
 /* Chart.js は canvas 自身ではなく「親要素のサイズ」を見て内部解像度を決める。
    canvas に直接 CSS で高さを強制すると、内部の描画バッファと表示サイズが
    食い違ってぼやける（文字も線も）。高さの制約はラッパー側に持たせる。 */
