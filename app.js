@@ -697,17 +697,29 @@ function showDay(dayIndex) {
       // 部位別（A/B/C）は表示しない。全身合計と肝臓のみ（依頼者指定・2026-09-19、
       // 肝臓は2026-09-22追加。しゃりばては肝が空になることで起きるため）。
       { label: "全身", data: toPoints(s.elapsed_h, s.glycogen_kcal),
-        borderColor: "#E98450", borderWidth: 3 },
+        borderColor: "#E98450", borderWidth: 3, yAxisID: "y" },
+      // 肝臓は容量 400kcal で全身（約3600kcal）とは桁が違うため、右の第2軸に置く。
+      // しゃりばて（Phase 4b-2）は肝が空になったときに起きるので、ゼロに近づく
+      // 様子がグラフの高さいっぱいで読めるようにする（作者指定・2026-09-22）。
       { label: "肝臓", data: toPoints(s.elapsed_h, s.glycogen_liver_kcal),
-        borderColor: "#63A6A0", borderWidth: 2 },
+        borderColor: "#63A6A0", borderWidth: 2, yAxisID: "y1" },
     ],
     null,
-    // 縦軸の上限は容量（体重・体脂肪率から決まる。tozan/derived.py の
-    // plan_summary が返す glycogen_capacity_kcal）に合わせて切り上げる。
-    // 以前は旧仕様の1800kcal固定容量を前提に2000で固定していた（Phase 4b-0でUI側が
-    // 追従していなかった分。2026-09-22）。
-    { y: { title: { display: true, text: "グリコーゲン [kcal]" }, min: 0,
-           max: Math.ceil(currentSummary.glycogen_capacity_kcal / 500) * 500 } }, 1);
+    {
+      // 左の軸の上限は全身の容量（体重・体脂肪率から決まる。tozan/derived.py の
+      // plan_summary が返す glycogen_capacity_kcal）に合わせて切り上げる。
+      // 以前は旧仕様の1800kcal固定容量を前提に2000で固定していた（Phase 4b-0でUI側が
+      // 追従していなかった分。2026-09-22）。
+      y: { position: "left", title: { display: true, text: "全身 [kcal]" }, min: 0,
+           max: Math.ceil(currentSummary.glycogen_capacity_kcal / 500) * 500 },
+      y1: { position: "right", title: { display: true, text: "肝臓 [kcal]" },
+            grid: { drawOnChartArea: false },
+            min: 0, max: currentSummary.liver_capacity_kcal },
+      // このグラフだけ軸が3本になりプロット部分が他グラフより狭くなるため、
+      // 標高軸は目盛り非表示にする（背景の塗りつぶし自体は残す。旧エネルギー
+      // グラフと同じ扱い・依頼者指定 2026-09-19）。
+      yElevation: { display: false, min: 0, max: 3200 },
+    }, 2);
 
   charts.efficiency = makeLineChart("chartEfficiency",
     [
