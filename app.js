@@ -295,10 +295,10 @@ function fieldInputHtml(spec) {
 
 function fieldHtml(spec) {
   const cls = spec.type === "boolean" ? "field field-checkbox" : "field";
-  const desc = spec.description_ja ? `<div class="desc">${spec.description_ja}</div>` : "";
+  // モデル化の根拠などの説明文は一般の利用者には伝わらないため表示しない
+  // （作者指定・2026-09-22、実機確認のフィードバック）。ラベル横の単位表記は残す。
   return `<div class="${cls}" data-field="${spec.key}">`
        + fieldInputHtml(spec)
-       + desc
        + `<div class="err-msg" id="err_${spec.key}"></div>`
        + `</div>`;
 }
