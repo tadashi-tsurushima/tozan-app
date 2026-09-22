@@ -248,6 +248,14 @@ const VO2_PACE_OPTIONS = [
   { value: 45, label: "のんびり (80-90%)" },
 ];
 
+// 出発時のグリコーゲン充填率（Phase 4b-0）も同様に3択にする。数値そのものは
+// contract/params.json の既定値のまま（display_scale は無いのでJS側も0.53等の生値）。
+const GLYCOGEN_FILL_OPTIONS = [
+  { value: 0.53, label: "通常食" },
+  { value: 0.8, label: "軽いローディング" },
+  { value: 1.0, label: "本格ローディング" },
+];
+
 function fieldInputHtml(spec) {
   const id = `f_${spec.key}`;
   if (spec.type === "boolean") {
@@ -259,6 +267,13 @@ function fieldInputHtml(spec) {
     const opts = VO2_PACE_OPTIONS.map(o =>
       `<option value="${o.value}" ${Math.round(spec.default) === o.value ? "selected" : ""}>`
       + `${o.label}</option>`).join("");
+    return `<label for="${id}">${spec.label_ja}</label>`
+         + `<select id="${id}" data-key="${spec.key}">${opts}</select>`;
+  }
+  if (spec.key === "glycogen_fill_ratio_init") {
+    const opts = GLYCOGEN_FILL_OPTIONS.map(o =>
+      `<option value="${o.value}" ${spec.default === o.value ? "selected" : ""}>`
+      + `${o.label} (${o.value})</option>`).join("");
     return `<label for="${id}">${spec.label_ja}</label>`
          + `<select id="${id}" data-key="${spec.key}">${opts}</select>`;
   }
@@ -698,8 +713,12 @@ function showDay(dayIndex) {
         borderColor: "#E98450", borderWidth: 3 },
     ],
     null,
-    // 現行モデルの最大値（約1800kcal）に対して固定（依頼者指定・2026-09-19）。
-    { y: { title: { display: true, text: "グリコーゲン [kcal]" }, min: 0, max: 2000 } }, 1);
+    // 縦軸の上限は容量（体重・体脂肪率から決まる。tozan/derived.py の
+    // plan_summary が返す glycogen_capacity_kcal）に合わせて切り上げる。
+    // 以前は旧仕様の1800kcal固定容量を前提に2000で固定していた（Phase 4b-0でUI側が
+    // 追従していなかった分。2026-09-22）。
+    { y: { title: { display: true, text: "グリコーゲン [kcal]" }, min: 0,
+           max: Math.ceil(currentSummary.glycogen_capacity_kcal / 500) * 500 } }, 1);
 
   charts.efficiency = makeLineChart("chartEfficiency",
     [
@@ -740,6 +759,18 @@ function renderSupplyPlan(plan, days) {
     html += `</ul></div>`;
   }
 
+  // しゃりばて（肝が空かつ吸収なし。Phase 4b-2）の発火地点。上の警告（筋の
+  // グリコーゲン枯渇）とは別の現象なので別枠で示す。
+  if (plan.hypoglycemic && plan.hypoglycemic.length) {
+    html += `<div class="warning-box"><b>しゃりばての警告</b><ul>`;
+    for (const h of plan.hypoglycemic) {
+      html += `<li>${dayLabel(days, h.day)} 出発${formatHM(h.elapsed_h)}後`
+            + `（${fmtDist(h.distance_km)} / 標高${fmtEle(h.elevation_m)}）: `
+            + `血糖の供給源が尽き、出せる力が大きく落ちています。補給が必要です</li>`;
+    }
+    html += `</ul></div>`;
+  }
+
   // 個々の補給タイミングではなく、1日ごとの合計だけを表示する
   // （依頼者指定・2026-09-19）。
   if (plan.daily.length) {
@@ -747,17 +778,36 @@ function renderSupplyPlan(plan, days) {
           + `<th>Glycogen<br><span class="unit">(kcal)</span></th>`
           + `<th>脂肪燃焼<br><span class="unit">(kcal)</span></th>`
           + `<th>行動食<br><span class="unit">(kcal)</span></th>`
-          + `<th>山頂補給<br><span class="unit">(kcal)</span></th></tr>`;
+          + `<th>まとまった補給<br><span class="unit">(kcal)</span></th></tr>`;
     for (const d of plan.daily) {
       html += `<tr><td>${dayLabel(days, d.day)}</td>`
             + `<td class="num consume">${d.glycogen_consumed_kcal.toFixed(0)}</td>`
             + `<td class="num consume">${d.fat_burned_kcal.toFixed(0)}</td>`
             + `<td class="num supply">${d.periodic_food_kcal.toFixed(0)}</td>`
-            + `<td class="num supply">${d.peak_food_kcal.toFixed(0)}</td></tr>`;
+            + `<td class="num supply">${d.meal_food_kcal.toFixed(0)}</td></tr>`;
     }
     html += `</table></div>`;
   } else {
     html += `<p class="hint">このルートでは行動食の補給タイミングがありません。</p>`;
+  }
+
+  // まとまった補給（休憩つき。Phase 4b-2）の個々の地点。歩行 meal_interval_minutes
+  // ごとに立ち止まって meal_kcal を食べる計画そのものなので、「どこで食べるか」を
+  // 一覧で示す（山頂での決め打ちをやめた代わりに、地点をここで提示する）。
+  const meals = plan.supplies.filter(s => s.kind === "meal");
+  if (meals.length) {
+    html += `<h3>まとまった補給の地点</h3>`
+          + `<div class="table-scroll"><table class="supply-table"><tr><th>日</th>`
+          + `<th>経過時間</th><th>距離</th><th>標高</th>`
+          + `<th>補給量<br><span class="unit">(kcal)</span></th></tr>`;
+    for (const m of meals) {
+      html += `<tr><td>${dayLabel(days, m.day)}</td>`
+            + `<td>${formatHM(m.elapsed_h)}</td>`
+            + `<td class="num">${fmtDist(m.distance_km)}</td>`
+            + `<td class="num">${fmtEle(m.elevation_m)}</td>`
+            + `<td class="num supply">${m.kcal.toFixed(0)}</td></tr>`;
+    }
+    html += `</table></div>`;
   }
 
   html += `<p class="hint">補給タイミング・警告の閾値は仮の計算式です。`
