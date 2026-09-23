@@ -250,6 +250,16 @@ const VO2_PACE_OPTIONS = [
 
 // 出発時のグリコーゲン充填率（Phase 4b-0）も同様に3択にする。数値そのものは
 // contract/params.json の既定値のまま（display_scale は無いのでJS側も0.53等の生値）。
+// 下りの速さ（Phase 6-6）。下り区間だけ歩行の上限に掛ける係数を百分率で選ぶ。
+// 100% が作者の位置（v_flat_gait = 1.06 m/s、実測9本の平均）。10%刻みのセレクトに
+// してあるのは、スマホでホイールとして回せて、一度実績に合わせたらそれを
+// 「現在の値を規定値に設定」で覚えられるようにするため（作者の判断・2026-09-23）。
+// params.json 側は 0.5〜2.0 の係数で、display_scale = 100 で百分率に変換される。
+const DESCENT_SPEED_OPTIONS = [];
+for (let pct = 50; pct <= 150; pct += 10) {
+  DESCENT_SPEED_OPTIONS.push({ value: pct, label: pct === 100 ? "100%（基準）" : `${pct}%` });
+}
+
 const GLYCOGEN_FILL_OPTIONS = [
   { value: 0.53, label: "通常食" },
   { value: 0.8, label: "軽いローディング" },
@@ -265,6 +275,14 @@ function fieldInputHtml(spec) {
   }
   if (spec.key === "vo2_usage_ratio") {
     const opts = VO2_PACE_OPTIONS.map(o =>
+      `<option value="${o.value}" ${Math.round(spec.default) === o.value ? "selected" : ""}>`
+      + `${o.label}</option>`).join("");
+    return `<label for="${id}">${spec.label_ja}</label>`
+         + `<select id="${id}" data-key="${spec.key}">${opts}</select>`;
+  }
+  if (spec.key === "descent_gait_factor") {
+    // spec.default は display_scale 適用後（＝100）で届く
+    const opts = DESCENT_SPEED_OPTIONS.map(o =>
       `<option value="${o.value}" ${Math.round(spec.default) === o.value ? "selected" : ""}>`
       + `${o.label}</option>`).join("");
     return `<label for="${id}">${spec.label_ja}</label>`
