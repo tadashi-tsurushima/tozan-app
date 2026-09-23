@@ -83,6 +83,14 @@ h1, h2, h3, legend, summary {
 }
 .hero .help-link:hover { text-decoration: underline; }
 
+/* スマホ幅では写真を低くして、入力欄が初期表示に入るようにする
+   （実機確認・2026-09-24。215px だと写真だけで画面の1/4を占めていた）。
+   .hero-content は下端に絶対配置なので、文字が入る高さ（約70px）を
+   上回っていれば切れない。 */
+@media (max-width: 480px) {
+  .hero { min-height: 150px; }
+}
+
 .sample-gpx { margin: 0 0 10px; }
 .sample-gpx a { color: var(--accent2); }
 
