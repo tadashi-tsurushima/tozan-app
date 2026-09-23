@@ -76,6 +76,12 @@ h1, h2, h3, legend, summary {
 }
 .hero h1 { font-size: 1.3rem; font-weight: 700; margin: 0 0 4px; color: var(--text); }
 .hero .sub { font-size: 0.82rem; opacity: 1; color: var(--text-muted); margin: 0; }
+/* 使い方（help.html）へのリンク。説明文の末尾に小さく置く。 */
+.hero .help-link {
+  color: var(--accent); text-decoration: none; font-weight: 600;
+  white-space: nowrap; margin-left: 6px;
+}
+.hero .help-link:hover { text-decoration: underline; }
 
 .sample-gpx { margin: 0 0 10px; }
 .sample-gpx a { color: var(--accent2); }

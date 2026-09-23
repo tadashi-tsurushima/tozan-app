@@ -2,7 +2,7 @@
 // オフラインで起動できるようにする。要件1（山中は圏外）の実現手段。
 //
 // アプリを更新したら CACHE_VERSION を上げること。古いキャッシュは activate 時に破棄する。
-const CACHE_VERSION = "v17";
+const CACHE_VERSION = "v18";
 const CACHE_NAME = `tozan-app-shell-${CACHE_VERSION}`;
 
 // 必須のアプリ本体一式。1つでも取得できなければ install 自体を失敗させ、
@@ -24,7 +24,7 @@ const REQUIRED_ASSETS = [
 // あれば使う付随ファイル（Step 4-5 の検証ページ verify.html と cases.json）。
 // 配布先（開発用 web/dist / 友人向け配布リポジトリ）によって同梱の有無が
 // 変わるため、無くても install 全体を失敗させない。
-const OPTIONAL_ASSETS = ["verify.html", "cases.json"];
+const OPTIONAL_ASSETS = ["help.html", "verify.html", "cases.json"];
 
 // { cache: "reload" } でブラウザの通常HTTPキャッシュを無視し、必ずネットワークから
 // 取り直す。cache.addAll() や素の fetch() だと、画像などが過去に一度取得済みの
