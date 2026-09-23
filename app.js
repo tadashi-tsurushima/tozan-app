@@ -579,6 +579,19 @@ function elevationBackdrop(s) {
   };
 }
 
+// 肝グリコーゲンを「満タンに対する %」にする（Phase 6-5、2026-09-23）。
+// 容量（liver_capacity_kcal）は tozan/derived.py が体表面積から計算して返す。
+function liverCapacity() {
+  const cap = currentSummary && currentSummary.liver_capacity_kcal;
+  return cap && cap > 0 ? cap : 0;
+}
+
+function liverPercent(s) {
+  const cap = liverCapacity();
+  if (!cap) return s.glycogen_liver_kcal.map(() => null);
+  return s.glycogen_liver_kcal.map((v) => (v == null ? null : 100 * v / cap));
+}
+
 function makeLineChart(canvasId, datasets, yTitle, extraScales, legendCount) {
   const ctx = document.getElementById(canvasId).getContext("2d");
   const shown = legendCount != null ? legendCount : datasets.length;
@@ -608,6 +621,15 @@ function makeLineChart(canvasId, datasets, yTitle, extraScales, legendCount) {
         },
       }, extraScales || {}),
       plugins: {
+        // データセットが tooltipFormat を持つときだけ独自の書式にする。
+        // 持たないものは Chart.js の既定（"ラベル: 値"）と同じ文字列を返す。
+        tooltip: {
+          callbacks: {
+            label: (ctx) => (typeof ctx.dataset.tooltipFormat === "function"
+              ? ctx.dataset.tooltipFormat(ctx.parsed.y)
+              : `${ctx.dataset.label}: ${ctx.formattedValue}`),
+          },
+        },
         legend: {
           display: shown > 1,
           // グラフ外に凡例を置くとその分プロット部分の縦幅が縮むため、
@@ -698,11 +720,15 @@ function showDay(dayIndex) {
       // 肝臓は2026-09-22追加。しゃりばては肝が空になることで起きるため）。
       { label: "全身", data: toPoints(s.elapsed_h, s.glycogen_kcal),
         borderColor: "#E98450", borderWidth: 3, yAxisID: "y" },
-      // 肝臓は容量 400kcal で全身（約3600kcal）とは桁が違うため、右の第2軸に置く。
+      // 肝臓は容量が全身（約3600kcal）とは桁が違うため、右の第2軸に置く。
       // しゃりばて（Phase 4b-2）は肝が空になったときに起きるので、ゼロに近づく
       // 様子がグラフの高さいっぱいで読めるようにする（作者指定・2026-09-22）。
-      { label: "肝臓", data: toPoints(s.elapsed_h, s.glycogen_liver_kcal),
-        borderColor: "#63A6A0", borderWidth: 2, yAxisID: "y1" },
+      // 軸は kcal ではなく容量に対する % にする（Phase 6-5、2026-09-23）。肝の容量は
+      // 体表面積から決まり体格で変わる（作者 343 kcal、小柄な人は 278 kcal）ので、
+      // 「残り何割か」＝しゃりばてまでの余裕を、誰が見ても同じ読み方にする。
+      { label: "肝臓", data: toPoints(s.elapsed_h, liverPercent(s)),
+        borderColor: "#63A6A0", borderWidth: 2, yAxisID: "y1",
+        tooltipFormat: (v) => `肝臓: ${v.toFixed(0)}%（${Math.round(v / 100 * liverCapacity())} kcal）` },
     ],
     null,
     {
@@ -712,9 +738,9 @@ function showDay(dayIndex) {
       // 追従していなかった分。2026-09-22）。
       y: { position: "left", title: { display: true, text: "全身 [kcal]" }, min: 0,
            max: Math.ceil(currentSummary.glycogen_capacity_kcal / 500) * 500 },
-      y1: { position: "right", title: { display: true, text: "肝臓 [kcal]" },
+      y1: { position: "right", title: { display: true, text: "肝臓 [% 満タン比]" },
             grid: { drawOnChartArea: false },
-            min: 0, max: currentSummary.liver_capacity_kcal },
+            min: 0, max: 100 },
       // このグラフだけ軸が3本になりプロット部分が他グラフより狭くなるため、
       // 標高軸は目盛り非表示にする（背景の塗りつぶし自体は残す。旧エネルギー
       // グラフと同じ扱い・依頼者指定 2026-09-19）。
