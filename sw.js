@@ -2,7 +2,7 @@
 // オフラインで起動できるようにする。要件1（山中は圏外）の実現手段。
 //
 // アプリを更新したら CACHE_VERSION を上げること。古いキャッシュは activate 時に破棄する。
-const CACHE_VERSION = "v21";
+const CACHE_VERSION = "v22";
 const CACHE_NAME = `tozan-app-shell-${CACHE_VERSION}`;
 
 // 必須のアプリ本体一式。1つでも取得できなければ install 自体を失敗させ、
