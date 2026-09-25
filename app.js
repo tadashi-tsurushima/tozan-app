@@ -610,6 +610,19 @@ function liverPercent(s) {
   return s.glycogen_liver_kcal.map((v) => (v == null ? null : 100 * v / cap));
 }
 
+// 大腿も満タン比（%）で描く。kcal のままだと容量が全身の半分ほどで、
+// グラフの下のほうを這って読めない（作者の指摘・2026-09-25）。
+function thighCapacity() {
+  const cap = currentSummary && currentSummary.glycogen_A_capacity_kcal;
+  return cap && cap > 0 ? cap : 0;
+}
+
+function thighPercent(s) {
+  const cap = thighCapacity();
+  if (!cap) return s.glycogen_A_kcal.map(() => null);
+  return s.glycogen_A_kcal.map((v) => (v == null ? null : 100 * v / cap));
+}
+
 function makeLineChart(canvasId, datasets, yTitle, extraScales, legendCount) {
   const ctx = document.getElementById(canvasId).getContext("2d");
   const shown = legendCount != null ? legendCount : datasets.length;
@@ -739,9 +752,10 @@ function showDay(dayIndex) {
       { label: "全身", data: toPoints(s.elapsed_h, s.glycogen_kcal),
         borderColor: "#E98450", borderWidth: 3, yAxisID: "y" },
       // 大腿（部位A）。急登でも下りでも最初に減る部位で、多くの場合ここを見れば
-      // よい（作者の観察。docs/06_ Phase 4b-3）。全身と同じ kcal の軸に乗せる。
-      { label: "大腿", data: toPoints(s.elapsed_h, s.glycogen_A_kcal),
-        borderColor: "#9B8CC7", borderWidth: 2, yAxisID: "y" },
+      // よい（作者の観察。docs/06_ Phase 4b-3）。肝と同じく満タン比の右軸に乗せる。
+      { label: "大腿", data: toPoints(s.elapsed_h, thighPercent(s)),
+        borderColor: "#9B8CC7", borderWidth: 2, yAxisID: "y1",
+        tooltipFormat: (v) => `大腿: ${v.toFixed(0)}%（${Math.round(v / 100 * thighCapacity())} kcal）` },
       // 肝臓は容量が全身（約3600kcal）とは桁が違うため、右の第2軸に置く。
       // しゃりばて（Phase 4b-2）は肝が空になったときに起きるので、ゼロに近づく
       // 様子がグラフの高さいっぱいで読めるようにする（作者指定・2026-09-22）。
@@ -760,7 +774,7 @@ function showDay(dayIndex) {
       // 追従していなかった分。2026-09-22）。
       y: { position: "left", title: { display: true, text: "全身 [kcal]" }, min: 0,
            max: Math.ceil(currentSummary.glycogen_capacity_kcal / 500) * 500 },
-      y1: { position: "right", title: { display: true, text: "肝臓 [% 満タン比]" },
+      y1: { position: "right", title: { display: true, text: "肝臓・大腿 [% 満タン比]" },
             grid: { drawOnChartArea: false },
             min: 0, max: 100 },
       // このグラフだけ軸が3本になりプロット部分が他グラフより狭くなるため、
