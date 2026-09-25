@@ -738,6 +738,10 @@ function showDay(dayIndex) {
       // 肝臓は2026-09-22追加。しゃりばては肝が空になることで起きるため）。
       { label: "全身", data: toPoints(s.elapsed_h, s.glycogen_kcal),
         borderColor: "#E98450", borderWidth: 3, yAxisID: "y" },
+      // 大腿（部位A）。急登でも下りでも最初に減る部位で、多くの場合ここを見れば
+      // よい（作者の観察。docs/06_ Phase 4b-3）。全身と同じ kcal の軸に乗せる。
+      { label: "大腿", data: toPoints(s.elapsed_h, s.glycogen_A_kcal),
+        borderColor: "#9B8CC7", borderWidth: 2, yAxisID: "y" },
       // 肝臓は容量が全身（約3600kcal）とは桁が違うため、右の第2軸に置く。
       // しゃりばて（Phase 4b-2）は肝が空になったときに起きるので、ゼロに近づく
       // 様子がグラフの高さいっぱいで読めるようにする（作者指定・2026-09-22）。
@@ -763,7 +767,7 @@ function showDay(dayIndex) {
       // 標高軸は目盛り非表示にする（背景の塗りつぶし自体は残す。旧エネルギー
       // グラフと同じ扱い・依頼者指定 2026-09-19）。
       yElevation: { display: false, min: 0, max: 3200 },
-    }, 2);
+    }, 3);
 
   charts.efficiency = makeLineChart("chartEfficiency",
     [
