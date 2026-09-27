@@ -75,6 +75,11 @@ h1, h2, h3, legend, summary {
   padding: 0 16px 14px;
 }
 .hero h1 { font-size: 1.3rem; font-weight: 700; margin: 0 0 4px; color: var(--text); }
+/* 配布版のバージョン。Service Worker が入れ替わったか目視で確かめるため
+   （計算コアだけの更新はリロードしても見た目が変わらない。2026-09-27）。
+   値は sw.js の CACHE_VERSION を tools/build_web.py が埋め込む。 */
+.hero h1 .app-version { font-size: 0.62rem; font-weight: 500; margin-left: 6px;
+  opacity: 0.65; letter-spacing: 0.02em; vertical-align: 0.35em; }
 .hero .sub { font-size: 0.82rem; opacity: 1; color: var(--text-muted); margin: 0; }
 /* 使い方（help.html）へのリンク。写真のオーバーレイの中に置くと、幅が
    足りないときに画面外へ押し出されて誰も気づかない（実機で確認・2026-09-24）。
