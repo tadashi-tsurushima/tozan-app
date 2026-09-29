@@ -260,6 +260,13 @@ for (let pct = 50; pct <= 150; pct += 10) {
   DESCENT_SPEED_OPTIONS.push({ value: pct, label: pct === 100 ? "100%（基準）" : `${pct}%` });
 }
 
+// 天気（Phase 7-5、2026-09-29）。日射の値（W/m²）を選ぶ。日射が効くのは森林限界より上だけ。
+// 値は ERA5 の山行日の実データから（contract/params.json の solar_W_m2 の説明を参照）。
+const WEATHER_SOLAR_OPTIONS = [
+  { value: 600, label: "晴れ" },
+  { value: 300, label: "曇り" },
+];
+
 const GLYCOGEN_FILL_OPTIONS = [
   { value: 0.53, label: "通常食" },
   { value: 0.8, label: "軽いローディング" },
@@ -283,6 +290,13 @@ function fieldInputHtml(spec) {
   if (spec.key === "descent_gait_factor") {
     // spec.default は display_scale 適用後（＝100）で届く
     const opts = DESCENT_SPEED_OPTIONS.map(o =>
+      `<option value="${o.value}" ${Math.round(spec.default) === o.value ? "selected" : ""}>`
+      + `${o.label}</option>`).join("");
+    return `<label for="${id}">${spec.label_ja}</label>`
+         + `<select id="${id}" data-key="${spec.key}">${opts}</select>`;
+  }
+  if (spec.key === "solar_W_m2") {
+    const opts = WEATHER_SOLAR_OPTIONS.map(o =>
       `<option value="${o.value}" ${Math.round(spec.default) === o.value ? "selected" : ""}>`
       + `${o.label}</option>`).join("");
     return `<label for="${id}">${spec.label_ja}</label>`
