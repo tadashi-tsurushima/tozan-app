@@ -24,6 +24,7 @@ const userFieldsEl = document.getElementById("userFields");
 const advancedFieldsEl = document.getElementById("advancedFields");
 const dayTabsEl = document.getElementById("dayTabs");
 const dayStatsEl = document.getElementById("dayStats");
+const waypointsEl = document.getElementById("waypoints");
 const chartsEl = document.getElementById("charts");
 const supplyPlanEl = document.getElementById("supplyPlan");
 const sampleGpxEl = document.getElementById("sampleGpx");
@@ -111,7 +112,8 @@ if "/core" not in sys.path:
 
 from tozan.api import simulate, default_params, validate_params
 from tozan.params import PARAMS_CONTRACT
-from tozan.derived import plan_summary, supply_plan, ui_series
+from tozan.derived import (plan_summary, supply_plan, ui_series, waypoint_table,
+                           weather_request_plan, weather_from_responses)
 from loaders.gpx import parse_gpx
 
 def form_spec_json():
@@ -140,7 +142,54 @@ def _split_error(e):
         return {"key": None, "message": e}
     return {"key": e[:sep], "message": e[sep + 2:]}
 
-def run_simulation_from_form(gpx_text, form_values_json):
+def _build_params(route, form_values_json):
+    """フォーム値（表示単位）から params を作り、検査する。(params, errors) を返す。"""
+    form_values = json.loads(form_values_json)
+    params = default_params()
+    for key, value in form_values.items():
+        spec = PARAMS_CONTRACT.get(key)
+        if spec is None:
+            continue
+        scale = spec.get("display_scale")
+        if scale and isinstance(value, (int, float)):
+            value = value / scale
+        params[key] = value
+
+    # 登山口の標高は GPX の最初の点から自動で入れる（2026-10-03、作者の判断で
+    # 詳細設定から外した）。以前の保存値がフォームに残っていても、こちらで上書きする。
+    params["T_air_elevation"] = max(0.0, float(route.points[0].ele))
+
+    errors = validate_params(params)
+    if errors:
+        return params, errors
+    return params, []
+
+def _parse_route(gpx_text):
+    try:
+        route = parse_gpx(gpx_text)
+    except Exception as e:
+        return None, f"GPXの読み込みに失敗しました: {e}"
+    if not route.points:
+        return None, "GPXファイルに位置データ（trkpt）が見つかりません。"
+    return route, None
+
+def weather_plan_from_form(gpx_text, form_values_json, start_date, today):
+    """計画モードの天気（2026-10-03）: いったん計算して日ごとの出発時刻と所要時間を出し、
+    Open-Meteo への問い合わせ（日ごとの出発地点・日付・時間帯と URL）を返す。"""
+    route, err = _parse_route(gpx_text)
+    if err:
+        return json.dumps({"ok": False, "errors": [{"key": None, "message": err}]})
+    params, errors = _build_params(route, form_values_json)
+    if errors:
+        return json.dumps({"ok": False, "errors": [_split_error(e) for e in errors]})
+    result = simulate(route, params)
+    return json.dumps({"ok": True, "plan": weather_request_plan(result, route, params, start_date, today)})
+
+def weather_apply(plan_json, responses_json):
+    """Open-Meteo の応答から日ごとの気温・湿度を出す。"""
+    return json.dumps(weather_from_responses(json.loads(plan_json), json.loads(responses_json)))
+
+def run_simulation_from_form(gpx_text, form_values_json, start_date=""):
     """GPXテキストとフォーム値（表示単位）から計算する。
 
     戻り値は常に JSON 文字列で、成功なら {"ok": true, "result": {...}}、
@@ -162,31 +211,33 @@ def run_simulation_from_form(gpx_text, form_values_json):
         return json.dumps({"ok": False, "errors": [
             {"key": None, "message": "GPXファイルに位置データ（trkpt）が見つかりません。"}]})
 
-    form_values = json.loads(form_values_json)
-    params = default_params()
-    for key, value in form_values.items():
-        spec = PARAMS_CONTRACT.get(key)
-        if spec is None:
-            continue
-        scale = spec.get("display_scale")
-        if scale and isinstance(value, (int, float)):
-            value = value / scale
-        params[key] = value
-
-    errors = validate_params(params)
+    params, errors = _build_params(route, form_values_json)
     if errors:
         return json.dumps({"ok": False, "errors": [_split_error(e) for e in errors]})
 
     result = simulate(route, params)
+    # 天気の欄の出発日が入っていれば、表示する日付を「出発日 + 日数」にする（2026-10-03）。
+    # 空なら GPX の日付のまま。計算そのもの（時刻・所要時間）は変わらない。
+    if start_date:
+        import datetime
+        d0 = datetime.date.fromisoformat(start_date)
+        for i, day in enumerate(result.days):
+            day.date = d0 + datetime.timedelta(days=i)
     summary = plan_summary(result, params)
     series = ui_series(result, pace_smooth_minutes=15)
     plan = supply_plan(result, params)
+    waypoints = waypoint_table(result, route, params)
     return json.dumps({"ok": True, "result": result.to_dict(), "summary": summary,
-                        "series": series, "plan": plan})
+                        "series": series, "plan": plan, "waypoints": waypoints})
 `;
 
 let pyodide = null;
 let runSimulationFromForm = null;
+let weatherPlanFromForm = null;
+let weatherApply = null;
+// 計画モードの天気（2026-10-03）。日ごとの {day, date, kind, T_air, RH, elevation_m}。
+// 保存する入力値には含めない（別の GPX を選ぶと消える）。
+let dayWeather = null;
 let formFields = [];  // form_spec_json() の内容
 
 async function boot() {
@@ -217,6 +268,8 @@ async function boot() {
 
     await pyodide.runPythonAsync(DRIVER_SRC);
     runSimulationFromForm = pyodide.globals.get("run_simulation_from_form");
+    weatherPlanFromForm = pyodide.globals.get("weather_plan_from_form");
+    weatherApply = pyodide.globals.get("weather_apply");
 
     const formSpecFn = pyodide.globals.get("form_spec_json");
     formFields = JSON.parse(formSpecFn());
@@ -448,8 +501,164 @@ document.addEventListener("change", (e) => {
 resetBtn.addEventListener("click", resetFormToDefaults);
 saveAsDefaultBtn.addEventListener("click", saveCurrentAsDefault);
 
-fileEl.addEventListener("change", () => {
+fileEl.addEventListener("change", async () => {
   runBtn.disabled = !fileEl.files.length;
+  fetchWeatherBtn.disabled = !fileEl.files.length;
+  // 別の GPX を選んだら日ごとの天気は消し、GPX に日付があれば出発日の初期値にする
+  setDayWeather(null);
+  const file = fileEl.files[0];
+  if (!file) return;
+  try {
+    const m = /<trkpt[\s\S]*?<time>([^<]+)<\/time>/.exec(await readFileAsText(file));   // metadata の作成日時を拾わない
+    if (m) {
+      const t = new Date(m[1]);
+      if (!isNaN(t)) startDateEl.value = localDateIso(t);
+    }
+  } catch (e) { /* 日付が読めなければ空のまま */ }
+});
+
+// ---------------------------------------------------------------- 計画モードの天気
+const startDateEl = document.getElementById("startDate");
+const fetchWeatherBtn = document.getElementById("fetchWeather");
+const clearWeatherBtn = document.getElementById("clearWeather");
+const weatherTableEl = document.getElementById("weatherTable");
+const WEATHER_KIND_JA = { forecast: "予報", climate: "過去10年の平均", past: "当日の記録" };
+
+function localDateIso(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function setDayWeather(days) {
+  dayWeather = days;
+  // 取得した値を覚えておく。1日目を直したら、その差を2日目以降（個別に直していない日）にも
+  // 足す（作者の要望 2026-10-03: 「もっと暑い」は縦走の全日に効かせる）。
+  if (days) days.forEach(d => {
+    if (d.T_fetched === undefined) { d.T_fetched = d.T_air; d.RH_fetched = d.RH; d.T_own = false; d.RH_own = false; }
+  });
+  clearWeatherBtn.hidden = !days;
+  if (!days) {
+    weatherTableEl.innerHTML = "";
+    return;
+  }
+  let html = `<div class="table-scroll"><table class="daily-table weather-table"><tr>`
+    + `<th>日</th><th>日付</th><th>出発地点<br><span class="unit">(m)</span></th>`
+    + `<th>気温<br><span class="unit">(℃)</span></th><th>湿度<br><span class="unit">(%)</span></th><th>情報</th></tr>`;
+  days.forEach((d, i) => {
+    const t = d.T_air == null ? "" : d.T_air;
+    const rh = d.RH == null ? "" : Math.round(d.RH * 100);
+    html += `<tr><td>${i + 1}日目</td><td>${shortDate(d.date)}</td><td class="num">${d.elevation_m}</td>`
+      + `<td><input type="number" step="0.1" id="wT_${i}" data-i="${i}" data-k="T_air" value="${t}"></td>`
+      + `<td><input type="number" step="1" min="0" max="100" id="wRH_${i}" data-i="${i}" data-k="RH" value="${rh}"></td>`
+      + `<td>${WEATHER_KIND_JA[d.kind] ?? d.kind}</td></tr>`;
+  });
+  html += `</table></div>`;
+  weatherTableEl.innerHTML = html;
+  weatherTableEl.querySelectorAll("input").forEach(el => {
+    el.addEventListener("change", () => {
+      const i = parseInt(el.dataset.i, 10);
+      const v = parseFloat(el.value);
+      if (isNaN(v)) return;
+      if (i === 0) {
+        setDay1Weather(el.dataset.k, el.dataset.k === "T_air" ? v : v / 100);
+        return;
+      }
+      const d = dayWeather[i];
+      if (el.dataset.k === "T_air") { d.T_air = v; d.T_own = true; }
+      else { d.RH = v / 100; d.RH_own = true; }
+    });
+  });
+  syncFieldsFromDay1();
+}
+
+// 日ごとの表の1日目と、条件入力の「行動中の平均気温（登山口）」・詳細設定の「湿度」を連動させる
+// （作者の要望 2026-10-03: 取得した値が入力欄に見えるように。1日目は表の値が計算に
+// 使われるので、欄だけ直しても効かない状態を作らない）。
+function syncFieldsFromDay1() {
+  if (!dayWeather || !dayWeather.length) return;
+  const d = dayWeather[0];
+  const t = document.getElementById("f_T_air");
+  const rh = document.getElementById("f_RH");
+  if (t && d.T_air != null) t.value = d.T_air;
+  if (rh && d.RH != null) rh.value = Math.round(d.RH * 100);
+  saveFormValues();
+}
+
+// 1日目の気温か湿度を直したとき: 取得した値との差を、個別に直していない日すべてに足す。
+function setDay1Weather(key, value) {
+  const d0 = dayWeather[0];
+  if (key === "T_air") {
+    const offset = d0.T_fetched == null ? 0 : value - d0.T_fetched;
+    dayWeather.forEach((d, i) => {
+      if (i === 0) d.T_air = value;
+      else if (!d.T_own && d.T_fetched != null) d.T_air = Math.round((d.T_fetched + offset) * 10) / 10;
+      const cell = document.getElementById(`wT_${i}`);
+      if (cell) cell.value = d.T_air ?? "";
+    });
+  } else {
+    const offset = d0.RH_fetched == null ? 0 : value - d0.RH_fetched;
+    dayWeather.forEach((d, i) => {
+      if (i === 0) d.RH = value;
+      else if (!d.RH_own && d.RH_fetched != null) d.RH = Math.min(1, Math.max(0.01, Math.round((d.RH_fetched + offset) * 100) / 100));
+      const cell = document.getElementById(`wRH_${i}`);
+      if (cell) cell.value = d.RH == null ? "" : Math.round(d.RH * 100);
+    });
+  }
+  syncFieldsFromDay1();
+}
+
+document.addEventListener("change", (e) => {
+  if (!dayWeather || !dayWeather.length) return;
+  const v = parseFloat(e.target.value);
+  if (isNaN(v)) return;
+  if (e.target.id === "f_T_air") setDay1Weather("T_air", v);
+  else if (e.target.id === "f_RH") setDay1Weather("RH", v / 100);
+});
+
+// 計算に渡す日ごとの天気。気温が空の日は null（その日は「行動中の平均気温（登山口）」を使う）。
+function weatherFormValues() {
+  if (!dayWeather) return {};
+  return {
+    day_T_air: dayWeather.map(d => d.T_air),
+    day_RH: dayWeather.map(d => d.RH),
+    day_T_air_elevation: dayWeather.map(d => d.elevation_m),
+  };
+}
+
+clearWeatherBtn.addEventListener("click", () => setDayWeather(null));
+
+fetchWeatherBtn.addEventListener("click", async () => {
+  const file = fileEl.files[0];
+  if (!file) return;
+  if (!startDateEl.value) {
+    setStatus(`<span class="ng">出発日を入れてください。</span>`);
+    return;
+  }
+  fetchWeatherBtn.disabled = true;
+  setStatus("天気を取得しています...");
+  try {
+    const gpxText = await readFileAsText(file);
+    const planResp = JSON.parse(weatherPlanFromForm(gpxText, JSON.stringify(collectFormValues()),
+                                                    startDateEl.value, localDateIso(new Date())));
+    if (!planResp.ok) {
+      showFieldErrors(planResp.errors);
+      setStatus(`<span class="ng">入力内容を確認してください。</span>`);
+      return;
+    }
+    const responses = [];
+    for (const req of planResp.plan.requests) {
+      const r = await fetch(req.url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      responses.push(await r.json());
+    }
+    const result = JSON.parse(weatherApply(JSON.stringify(planResp.plan), JSON.stringify(responses)));
+    setDayWeather(result.days);
+    setStatus("天気を取得しました。計算しています...");
+    runBtn.click();
+  } catch (err) {
+    setStatus(`<span class="ng">天気を取得できませんでした（通信を確認してください）: ${err.message || err}</span>`);
+  } finally {
+    fetchWeatherBtn.disabled = !fileEl.files.length;
+  }
 });
 
 runBtn.addEventListener("click", async () => {
@@ -464,9 +673,9 @@ runBtn.addEventListener("click", async () => {
 
   try {
     const gpxText = await readFileAsText(file);
-    const formValues = collectFormValues();
+    const formValues = { ...collectFormValues(), ...weatherFormValues() };
     const t0 = performance.now();
-    const responseJson = runSimulationFromForm(gpxText, JSON.stringify(formValues));
+    const responseJson = runSimulationFromForm(gpxText, JSON.stringify(formValues), startDateEl.value);
     const elapsedMs = performance.now() - t0;
     const response = JSON.parse(responseJson);
 
@@ -478,11 +687,13 @@ runBtn.addEventListener("click", async () => {
         : `<span class="ng">入力内容を確認してください。</span>`);
       dayTabsEl.hidden = true;
       chartsEl.hidden = true;
+      waypointsEl.hidden = true;
       supplyPlanEl.innerHTML = "";
     } else {
       render(response.summary, file.name, elapsedMs);
       currentSeries = response.series;
       currentSummary = response.summary;
+      currentWaypoints = response.waypoints;
       chartsEl.hidden = false;
       buildDayTabs(currentSeries.days);
       showDay(0);
@@ -494,6 +705,7 @@ runBtn.addEventListener("click", async () => {
     setStatus(`<span class="ng">エラー: ${err.message || err}</span>`);
     dayTabsEl.hidden = true;
     chartsEl.hidden = true;
+    waypointsEl.hidden = true;
     supplyPlanEl.innerHTML = "";
   } finally {
     runBtn.disabled = false;
@@ -557,6 +769,7 @@ function render(summary, fileName) {
 
 let currentSeries = null;
 let currentSummary = null;
+let currentWaypoints = null;  // waypoint_table() の結果（計画モード、2026-10-02）
 let charts = {};
 
 // 日別内訳テーブルの「日」列は "2025-08-15" のままだと幅を取りすぎるので、
@@ -731,9 +944,72 @@ function renderDayStats(dayIndex) {
       + `<span class="day-stat-value day-stat-value-elev">↑${d.up_m.toFixed(0)}m<br>↓${d.down_m.toFixed(0)}m</span></div>`;
 }
 
+// tozan/derived.py の waypoint_table() が返す地点ごとの表（計画モード、2026-10-02）。
+// 地点名のある GPX（Yamareco の計画など）でだけ出す。到着時刻はその日の出発時刻に
+// モデルの時間を足したもので、GPX に書いてある計画の通過時刻ではない。
+// 「出発から」と「区間」の切り替え（作者の要望・2026-10-02）。既定は「出発から」。選んだほうを覚えておく。
+const WAYPOINT_MODE_KEY = "tozan_waypoint_mode_v1";
+let waypointMode = "cum";
+try { if (localStorage.getItem(WAYPOINT_MODE_KEY) === "leg") waypointMode = "leg"; } catch (e) { /* 使えなければ出発からのまま */ }
+let waypointDay = 0;
+
+function renderWaypoints(dayIndex) {
+  waypointDay = dayIndex;
+  const day = currentWaypoints && currentWaypoints.days[dayIndex];
+  if (!day || !day.rows.some(r => r.kind === "point")) {
+    waypointsEl.hidden = true;
+    waypointsEl.innerHTML = "";
+    return;
+  }
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const label = r => r.name ? esc(r.name) : (r.kind === "start" ? "出発地点" : "到着地点");
+  const cum = waypointMode === "cum";
+  const basis = cum ? "出発から" : "前の地点から";
+  let html = `<h2>地点ごとの予定</h2>`
+    + `<div class="wp-mode" role="group" aria-label="表示の切り替え">`
+    + `<button type="button" data-mode="cum" class="${cum ? "active" : ""}" aria-pressed="${cum}">出発から</button>`
+    + `<button type="button" data-mode="leg" class="${cum ? "" : "active"}" aria-pressed="${!cum}">区間</button></div>`
+    + `<span class="wp-basis">時間・距離・登り下り・消費・汗は${basis}の値</span>`
+    + `<div class="table-scroll"><table class="daily-table waypoint-table"><tr>`
+    + `<th class="wp-name">地点</th><th>到着</th><th>時間</th>`
+    + `<th>距離<br><span class="unit">(km)</span></th>`
+    + `<th>登り／下り<br><span class="unit">(m)</span></th>`
+    + `<th>消費<br><span class="unit">(kcal)</span></th>`
+    + `<th>汗<br><span class="unit">(L)</span></th></tr>`;
+  for (const r of day.rows) {
+    const start = r.kind === "start";
+    const h = cum ? r.arrival_h : r.leg_h;
+    const km = cum ? r.cum_km : r.leg_km;
+    const up = cum ? r.cum_up_m : r.leg_up_m;
+    const down = cum ? r.cum_down_m : r.leg_down_m;
+    const kcal = cum ? r.cum_kcal : r.leg_kcal;
+    const sweat = cum ? r.sweat_kg_cum : r.leg_sweat_kg;
+    html += `<tr class="${start ? "wp-start" : ""}"><td class="wp-name">${label(r)}</td>`
+      + `<td class="num">${r.arrival_clock ?? formatHM(r.arrival_h)}${start ? " 発" : ""}</td>`
+      + `<td class="num">${start ? "" : formatHM(h)}</td>`
+      + `<td class="num">${start ? "" : km.toFixed(2)}</td>`
+      + `<td class="num">${start ? "" : `+${up.toFixed(0)} / −${down.toFixed(0)}`}</td>`
+      + `<td class="num consume">${start ? "" : kcal.toFixed(0)}</td>`
+      + `<td class="num supply">${start ? "" : sweat.toFixed(2)}</td></tr>`;
+  }
+  html += `</table></div>`
+    + `<p class="wp-note">到着時刻は出発時刻にモデルの時間を足したものです（GPX の計画の時刻ではありません）。`
+    + `時間は途中の補給の休憩を含みます。距離は水平距離です。</p>`;
+  waypointsEl.innerHTML = html;
+  waypointsEl.hidden = false;
+  waypointsEl.querySelectorAll(".wp-mode button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      waypointMode = btn.dataset.mode;
+      try { localStorage.setItem(WAYPOINT_MODE_KEY, waypointMode); } catch (e) { /* 保存できなくても表示は切り替える */ }
+      renderWaypoints(waypointDay);
+    });
+  });
+}
+
 function showDay(dayIndex) {
   const s = currentSeries.days[dayIndex];
   renderDayStats(dayIndex);
+  renderWaypoints(dayIndex);
   destroyCharts();
 
   // 標高を灰色の背景として敷き、右側の第2軸に目盛りを出す（YAMAP 風）。

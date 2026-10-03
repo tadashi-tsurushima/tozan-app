@@ -19,7 +19,7 @@
   <div class="hero-bg" style="background-image: url('img/hero.jpg')"></div>
   <div class="hero-overlay"></div>
   <div class="hero-content">
-    <h1>登山エネルギー計算<span class="app-version" id="app-version">v28</span></h1>
+    <h1>登山エネルギー計算<span class="app-version" id="app-version">v29</span></h1>
     <p class="sub">
       GPXルートを選ぶと、所要時間・消費エネルギー・発汗量を計算します。
     </p>
@@ -47,12 +47,25 @@
   </div>
 </fieldset>
 
+<fieldset id="weatherBox">
+  <legend>天気（日付から取得）</legend>
+  <div class="weather-row">
+    <label for="startDate">出発日</label>
+    <input type="date" id="startDate">
+    <button type="button" id="fetchWeather" class="secondary" disabled>天気を取得</button>
+    <button type="button" id="clearWeather" class="secondary" hidden>使わない</button>
+  </div>
+  <div id="weatherTable"></div>
+  <p class="weather-note">5日以内は天気予報、それより先は過去10年の同じ時期の平均です。暑さが違うと感じたら直してください。取得すると、ルートの座標（約1km単位）が Open-Meteo に送られます。</p>
+</fieldset>
+
 <button id="run" disabled>計算する</button>
 
 <div id="out"></div>
 
 <div id="dayTabs" class="day-tabs" hidden></div>
 <div id="dayStats" class="day-stats" hidden></div>
+<div id="waypoints" hidden></div>
 <div id="charts" hidden>
   <h2>心拍</h2><div class="chart-wrap"><canvas id="chartHr"></canvas></div>
   <h2>スピード</h2><div class="chart-wrap"><canvas id="chartPace"></canvas></div>

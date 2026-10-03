@@ -2,7 +2,7 @@
 // オフラインで起動できるようにする。要件1（山中は圏外）の実現手段。
 //
 // アプリを更新したら CACHE_VERSION を上げること。古いキャッシュは activate 時に破棄する。
-const CACHE_VERSION = "v28";
+const CACHE_VERSION = "v29";
 const CACHE_NAME = `tozan-app-shell-${CACHE_VERSION}`;
 
 // 必須のアプリ本体一式。1つでも取得できなければ install 自体を失敗させ、
@@ -86,6 +86,9 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+  // 天気（Open-Meteo、計画モード 2026-10-03）はキャッシュせず毎回ネットに取りに行く。
+  // キャッシュすると同じ問い合わせに古い予報が返る。
+  if (new URL(req.url).hostname.endsWith("open-meteo.com")) return;
 
   event.respondWith(
     (async () => {
